@@ -1,6 +1,6 @@
 {
-  "name": "karotter.js",
-  "version": "0.1.0",
+  "name": "@mikumiku-jp/karotter.js",
+  "version": "0.1.1",
   "description": "Karotter API wrapper",
   "repository": {
     "type": "git",
@@ -25,6 +25,7 @@
     "dist",
     "README.md",
     "docs/README.md",
+    "docs/karotter-js.md",
     "docs/api-reference.md",
     "docs/api-spec.md"
   ],

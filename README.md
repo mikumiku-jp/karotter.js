@@ -5,13 +5,13 @@ Karotter API を TypeScript から扱うためのクライアントです。公�
 このREADMEと `docs/` 配下のドキュメントはAIが作成しています。実装と挙動に差がある場合は、ソースコード側を優先してください。
 
 ```bash
-npm install karotter.js
+npm install @mikumiku-jp/karotter.js
 ```
 
 ## 使い方
 
 ```ts
-import { karotter } from "karotter.js";
+import { karotter } from "@mikumiku-jp/karotter.js";
 
 const kt = await karotter.login({
   id: process.env.KAROTTER_IDENTIFIER ?? "",
@@ -115,7 +115,7 @@ const raw = await kt.request("GET", "/posts/631800");
 HTTPエラーは `KarotterError` 系に変換されます。
 
 ```ts
-import { BannedError, RateLimitError } from "karotter.js";
+import { BannedError, RateLimitError } from "@mikumiku-jp/karotter.js";
 
 try {
   await kt.post("hello");
@@ -135,6 +135,7 @@ try {
 | ドキュメント | 内容 |
 |---|---|
 | [docs/README.md](./docs/README.md) | karotter.js の使い方 |
+| [docs/karotter-js.md](./docs/karotter-js.md) | SDKの説明書、公開メソッド一覧、payload、エラー |
 | [docs/api-reference.md](./docs/api-reference.md) | リバースエンジニアリングで確認したHTTP API |
 | [docs/api-spec.md](./docs/api-spec.md) | 解析メモ寄りの内部仕様 |
 

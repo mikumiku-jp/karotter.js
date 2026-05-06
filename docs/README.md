@@ -1,11 +1,11 @@
 # karotter.js ガイド
 
-karotter.js の公開APIは `karotter` から始めます。HTTP endpointの一覧は [API Reference](./api-reference.md) にあります。
+karotter.js の公開APIは `karotter` から始めます。SDKの詳しい説明書は [karotter-js.md](./karotter-js.md)、HTTP endpointの一覧は [API Reference](./api-reference.md) にあります。
 
 ## セッション
 
 ```ts
-import { karotter } from "karotter.js";
+import { karotter } from "@mikumiku-jp/karotter.js";
 
 const kt = await karotter.login({
   id: "username-or-email",
@@ -236,7 +236,7 @@ import {
   KarotterError,
   RateLimitError,
   ValidationError,
-} from "karotter.js";
+} from "@mikumiku-jp/karotter.js";
 
 try {
   await kt.post("hello");
@@ -279,7 +279,7 @@ const kt = karotter.create({
 配布物はESM、CommonJS、型定義を含みます。ソースはTypeScriptだけです。
 
 ```ts
-import type { Karotter, Post, PostOptions, RegisterInput } from "karotter.js";
+import type { Karotter, Post, PostOptions, RegisterInput } from "@mikumiku-jp/karotter.js";
 ```
 
 ビルド:
