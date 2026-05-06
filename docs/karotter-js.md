@@ -286,7 +286,17 @@ await kt.users.get("@karon");
 await kt.users.follow(profile.user);
 ```
 
-usernameは `@` 付きでも渡せます。
+usernameは `@` 付きでも渡せます。ユーザーIDを渡す高レベルAPIは、基本的にusername指定もできます。username指定時はSDKが `/users/{username}` でIDへ解決します。
+
+```ts
+await kt.follows.follow("@name");
+await kt.dm.createGroup(["@alice", "@bob"]);
+await kt.social.createCircle({ name: "friends", memberIds: ["@alice"] });
+await kt.social.sendQuestion({ targetUserId: "@alice", content: "質問" });
+await kt.radio.inviteSpeaker(spaceId, "@alice");
+await kt.developer.getUser("@alice");
+await kt.admin.user("@alice");
+```
 
 ## メソッド一覧
 
@@ -475,7 +485,7 @@ usernameは `@` 付きでも渡せます。
 | `respondToRequest(action)` | `"accept" | "reject"` | `MessageEnvelope` | `POST /dm/groups/{groupId}/request/{action}` |
 | `acceptRequest()` / `rejectRequest()` | なし | `MessageEnvelope` | 同上 |
 | `call()` | なし | `{ call }` | `GET /dm/groups/{groupId}/call` |
-| `startCall()` / `joinCall()` / `leaveCall()` | なし | `{ call }` or `MessageEnvelope` | `/dm/groups/{groupId}/call/*` |
+| `startCall(body?)` / `joinCall(body?)` / `leaveCall(body?)` | JSON任意 | `{ call }` or `MessageEnvelope` | `/dm/groups/{groupId}/call/*` |
 | `info()` | なし | `{ group }` | `GET /dm/groups/{groupId}/info` |
 | `settings()` / `updateSettings(body)` | なし / JSON | JSON | `/dm/groups/{groupId}/settings` |
 | `startTyping()` / `stopTyping()` | なし | `MessageEnvelope` | `/dm/groups/{groupId}/typing*` |
@@ -495,6 +505,14 @@ const dm = await kt.dm.with("@karon");
 await dm.send("hello");
 await dm.sendMedia("image", [{ file, alt: "説明" }]);
 await dm.sendPoll("どれ？", { options: ["A", "B"] });
+
+const group = await kt.dm.createGroup(["@alice", "@bob"]);
+await group.addMember("@carol");
+await group.addMembers(["@dave", 123]);
+
+await group.startCall({ mode: "voice" });
+await group.joinCall({ device: "desktop" });
+await group.leaveCall({ reason: "manual" });
 ```
 
 `DmMessageOptions` は `{ replyToId?, attachments?, poll? }` です。添付は `attachments`、投稿は `media` でフィールド名が違います。
@@ -537,7 +555,7 @@ await dm.sendPoll("どれ？", { options: ["A", "B"] });
 | `addCircleMember(circleId, user)` | `number | string`, `ResourceTarget` | `MessageEnvelope` | `POST /social/circles/{circleId}/members` |
 | `removeCircleMember(circleId, user)` | `number | string`, `ResourceTarget` | `MessageEnvelope` | `DELETE /social/circles/{circleId}/members/{userId}` |
 | `lists()` | なし | `{ lists }` | `GET /social/lists` |
-| `createList(input)` | `{ name; description?; isPublic? }` | `{ list }` | `POST /social/lists` |
+| `createList(input)` | `{ name; description?; isPublic?; memberIds? }` | `{ list }` | `POST /social/lists` |
 | `deleteList(id)` | `number | string` | `MessageEnvelope` | `DELETE /social/lists/{id}` |
 | `listPosts(listId, query?)` | `number | string`, `Pagination` | `{ posts, pagination? }` | `GET /social/lists/{listId}/posts` |
 | `addListMember(listId, user)` / `removeListMember(listId, user)` | `number | string`, `ResourceTarget` | `MessageEnvelope` | `/social/lists/{listId}/members` |
@@ -553,13 +571,27 @@ await dm.sendPoll("どれ？", { options: ["A", "B"] });
 | `questionInbox()` | なし | `{ questions, pagination? }` | `GET /social/questions/inbox` |
 | `answerQuestion(id, content)` | `number | string`, `string` | `{ question }` | `POST /social/questions/{id}` |
 | `deleteQuestion(id)` | `number | string` | `MessageEnvelope` | `DELETE /social/questions/{id}` |
-| `sendQuestion(input)` / `sendAnonymousQuestion(input)` | `{ targetUserId; content }` | `MessageEnvelope` | `POST /social/questions/send` |
-| `askQuestion(input)` | `{ targetUserId; content }` | `MessageEnvelope` | `POST /social/questions/ask` |
-| `postQuestion(input)` | `{ targetUserId; content }` | `MessageEnvelope` | `POST /social/questions/post` |
+| `sendQuestion(input)` / `sendAnonymousQuestion(input)` | `{ targetUserId: ResourceTarget; content }` | `MessageEnvelope` | `POST /social/questions/send` |
+| `askQuestion(input)` | `{ targetUserId: ResourceTarget; content }` | `MessageEnvelope` | `POST /social/questions/ask` |
+| `postQuestion(input)` | `{ targetUserId: ResourceTarget; content }` | `MessageEnvelope` | `POST /social/questions/post` |
 | `linkPreview(url)` | `string` | `LinkPreview` | `GET /social/link-preview` |
 | `linkPreviewImage(url)` | `string` | `{ imageUrl }` | `GET /social/link-preview-image` |
 
 story作成はSDK側で専用FormData builderをまだ持っていません。`FormData` にサイト準拠の `media`、`caption`、`visibility` などを入れて渡します。
+
+```ts
+await kt.social.createCircle({
+  name: "friends",
+  memberIds: ["@alice", "@bob"],
+});
+
+await kt.social.addCircleMember(circleId, "@carol");
+
+await kt.social.createList({
+  name: "watch",
+  memberIds: ["@alice", 123],
+});
+```
 
 ### `kt.radio`
 

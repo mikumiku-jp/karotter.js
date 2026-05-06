@@ -130,6 +130,23 @@ export interface NotificationReadAllOptions {
   types?: string[];
 }
 
+export interface CircleCreateOptions {
+  name: string;
+  memberIds?: ResourceTarget[];
+}
+
+export interface SocialListCreateOptions {
+  name: string;
+  description?: string;
+  isPublic?: boolean;
+  memberIds?: ResourceTarget[];
+}
+
+export interface QuestionSendOptions {
+  targetUserId: ResourceTarget;
+  content: string;
+}
+
 export interface NewsListOptions extends Pagination {
   category?: string;
 }
@@ -934,10 +951,11 @@ export class UsersActions {
     return this.rest.patch("/users/username", { username });
   }
 
-  setPinnedPost(target: ResourceTarget | null): Promise<JsonObject> {
+  async setPinnedPost(target: ResourceTarget | null): Promise<JsonObject> {
+    const postId = target === null ? undefined : idOf(target);
     return this.rest.patch(
       "/users/profile/pinned-post",
-      target === null ? {} : { postId: idOf(target) },
+      postId === undefined ? {} : { postId },
     );
   }
 
@@ -1001,16 +1019,22 @@ export class UsersActions {
 export class FollowActions {
   constructor(private readonly rest: RestClient) {}
 
-  follow(target: ResourceTarget): Promise<MessageEnvelope> {
-    return this.rest.post(`/follow/${encodeId(idOf(target))}`);
+  async follow(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.rest.post(
+      `/follow/${encodeId(await resolveUserId(this.rest, target))}`,
+    );
   }
 
-  unfollow(target: ResourceTarget): Promise<MessageEnvelope> {
-    return this.rest.delete(`/follow/${encodeId(idOf(target))}`);
+  async unfollow(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.rest.delete(
+      `/follow/${encodeId(await resolveUserId(this.rest, target))}`,
+    );
   }
 
-  removeFollower(target: ResourceTarget): Promise<MessageEnvelope> {
-    return this.rest.delete(`/follow/follower/${encodeId(idOf(target))}`);
+  async removeFollower(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.rest.delete(
+      `/follow/follower/${encodeId(await resolveUserId(this.rest, target))}`,
+    );
   }
 
   pendingRequests(): Promise<{ requests: unknown[] }> {
@@ -1026,44 +1050,60 @@ export class FollowActions {
     );
   }
 
-  enablePostNotify(target: ResourceTarget): Promise<MessageEnvelope> {
-    return this.rest.post(`/follow/${encodeId(idOf(target))}/post-notify`);
+  async enablePostNotify(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.rest.post(
+      `/follow/${encodeId(await resolveUserId(this.rest, target))}/post-notify`,
+    );
   }
 
-  disablePostNotify(target: ResourceTarget): Promise<MessageEnvelope> {
-    return this.rest.delete(`/follow/${encodeId(idOf(target))}/post-notify`);
+  async disablePostNotify(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.rest.delete(
+      `/follow/${encodeId(await resolveUserId(this.rest, target))}/post-notify`,
+    );
   }
 
   blocked(): Promise<UserList> {
     return this.rest.get("/follow/block");
   }
 
-  block(target: ResourceTarget): Promise<MessageEnvelope> {
-    return this.rest.post(`/follow/block/${encodeId(idOf(target))}`);
+  async block(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.rest.post(
+      `/follow/block/${encodeId(await resolveUserId(this.rest, target))}`,
+    );
   }
 
-  unblock(target: ResourceTarget): Promise<MessageEnvelope> {
-    return this.rest.delete(`/follow/block/${encodeId(idOf(target))}`);
+  async unblock(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.rest.delete(
+      `/follow/block/${encodeId(await resolveUserId(this.rest, target))}`,
+    );
   }
 
   muted(): Promise<UserList> {
     return this.rest.get("/follow/mute");
   }
 
-  mute(target: ResourceTarget): Promise<MessageEnvelope> {
-    return this.rest.post(`/follow/mute/${encodeId(idOf(target))}`);
+  async mute(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.rest.post(
+      `/follow/mute/${encodeId(await resolveUserId(this.rest, target))}`,
+    );
   }
 
-  unmute(target: ResourceTarget): Promise<MessageEnvelope> {
-    return this.rest.delete(`/follow/mute/${encodeId(idOf(target))}`);
+  async unmute(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.rest.delete(
+      `/follow/mute/${encodeId(await resolveUserId(this.rest, target))}`,
+    );
   }
 
-  hideReposts(target: ResourceTarget): Promise<MessageEnvelope> {
-    return this.rest.post(`/follow/hide-rekarots/${encodeId(idOf(target))}`);
+  async hideReposts(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.rest.post(
+      `/follow/hide-rekarots/${encodeId(await resolveUserId(this.rest, target))}`,
+    );
   }
 
-  showReposts(target: ResourceTarget): Promise<MessageEnvelope> {
-    return this.rest.delete(`/follow/hide-rekarots/${encodeId(idOf(target))}`);
+  async showReposts(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.rest.delete(
+      `/follow/hide-rekarots/${encodeId(await resolveUserId(this.rest, target))}`,
+    );
   }
 
   hideRekarots(target: ResourceTarget): Promise<MessageEnvelope> {
@@ -1086,14 +1126,15 @@ export class DmActions {
   }
 
   async createGroup(targets: ResourceTarget[]): Promise<DmConversation> {
+    const userIds = await resolveUserIds(this.rest, targets);
     const response = await this.rest.post<{ group: DmGroup }>("/dm/groups", {
-      userIds: targets.map((target) => Number(idOf(target))),
+      userIds: userIds.map((userId) => Number(userId)),
     });
     return new DmConversation(this.rest, response.group);
   }
 
   async with(target: ResourceTarget): Promise<DmConversation> {
-    const targetUserId = await this.resolveUserId(target);
+    const targetUserId = await resolveUserId(this.rest, target);
     const response = await this.rest.post<{ group: DmGroup }>("/dm/start", {
       targetUserId: Number(targetUserId),
     });
@@ -1129,13 +1170,7 @@ export class DmActions {
   }
 
   private async resolveUserId(target: ResourceTarget): Promise<Snowflake | string> {
-    if (typeof target === "object") return target.id;
-    if (typeof target === "number") return target;
-    if (/^\d+$/.test(target)) return target;
-    const detail = await this.rest.get<UserDetail>(
-      `/users/${encodeId(stripAt(target))}`,
-    );
-    return detail.user.id;
+    return resolveUserId(this.rest, target);
   }
 }
 
@@ -1206,21 +1241,24 @@ export class DmConversation {
     return this.rest.post(`/dm/groups/${encodeId(this.group.id)}/clear`);
   }
 
-  addMembers(targets: ResourceTarget[]): Promise<MessageEnvelope> {
+  async addMembers(targets: ResourceTarget[]): Promise<MessageEnvelope> {
+    const userIds = await resolveUserIds(this.rest, targets);
     return this.rest.post(`/dm/groups/${encodeId(this.group.id)}/members`, {
-      userIds: targets.map((target) => Number(idOf(target))),
+      userIds: userIds.map((userId) => Number(userId)),
     });
   }
 
-  addMember(target: ResourceTarget): Promise<MessageEnvelope> {
+  async addMember(target: ResourceTarget): Promise<MessageEnvelope> {
+    const userId = await resolveUserId(this.rest, target);
     return this.rest.post(`/dm/groups/${encodeId(this.group.id)}/members`, {
-      userId: Number(idOf(target)),
+      userId: Number(userId),
     });
   }
 
-  removeMember(target: ResourceTarget): Promise<MessageEnvelope> {
+  async removeMember(target: ResourceTarget): Promise<MessageEnvelope> {
+    const userId = await resolveUserId(this.rest, target);
     return this.rest.delete(
-      `/dm/groups/${encodeId(this.group.id)}/members/${encodeId(idOf(target))}`,
+      `/dm/groups/${encodeId(this.group.id)}/members/${encodeId(userId)}`,
     );
   }
 
@@ -1246,16 +1284,25 @@ export class DmConversation {
     return this.rest.get(`/dm/groups/${encodeId(this.group.id)}/call`);
   }
 
-  startCall(): Promise<{ call: unknown }> {
-    return this.rest.post(`/dm/groups/${encodeId(this.group.id)}/call/start`);
+  startCall(body?: JsonObject): Promise<{ call: unknown }> {
+    return this.rest.post(
+      `/dm/groups/${encodeId(this.group.id)}/call/start`,
+      body,
+    );
   }
 
-  joinCall(): Promise<{ call: unknown }> {
-    return this.rest.post(`/dm/groups/${encodeId(this.group.id)}/call/join`);
+  joinCall(body?: JsonObject): Promise<{ call: unknown }> {
+    return this.rest.post(
+      `/dm/groups/${encodeId(this.group.id)}/call/join`,
+      body,
+    );
   }
 
-  leaveCall(): Promise<MessageEnvelope> {
-    return this.rest.post(`/dm/groups/${encodeId(this.group.id)}/call/leave`);
+  leaveCall(body?: JsonObject): Promise<MessageEnvelope> {
+    return this.rest.post(
+      `/dm/groups/${encodeId(this.group.id)}/call/leave`,
+      body,
+    );
   }
 
   info(): Promise<{ group: DmGroup }> {
@@ -1451,23 +1498,34 @@ export class SocialActions {
     return this.rest.get("/social/circles");
   }
 
-  createCircle(input: { name: string; memberIds?: Snowflake[] }): Promise<{ circle: unknown }> {
-    return this.rest.post("/social/circles", input);
+  async createCircle(input: CircleCreateOptions): Promise<{ circle: unknown }> {
+    const memberIds =
+      input.memberIds === undefined
+        ? undefined
+        : (await resolveUserIds(this.rest, input.memberIds)).map((userId) =>
+            Number(userId),
+          );
+    return this.rest.post("/social/circles", {
+      ...input,
+      memberIds,
+    });
   }
 
   deleteCircle(id: Snowflake | string): Promise<MessageEnvelope> {
     return this.rest.delete(`/social/circles/${encodeId(id)}`);
   }
 
-  addCircleMember(circleId: Snowflake | string, user: ResourceTarget): Promise<MessageEnvelope> {
+  async addCircleMember(circleId: Snowflake | string, user: ResourceTarget): Promise<MessageEnvelope> {
+    const userId = await resolveUserId(this.rest, user);
     return this.rest.post(`/social/circles/${encodeId(circleId)}/members`, {
-      userId: Number(idOf(user)),
+      userId: Number(userId),
     });
   }
 
-  removeCircleMember(circleId: Snowflake | string, user: ResourceTarget): Promise<MessageEnvelope> {
+  async removeCircleMember(circleId: Snowflake | string, user: ResourceTarget): Promise<MessageEnvelope> {
+    const userId = await resolveUserId(this.rest, user);
     return this.rest.delete(
-      `/social/circles/${encodeId(circleId)}/members/${encodeId(idOf(user))}`,
+      `/social/circles/${encodeId(circleId)}/members/${encodeId(userId)}`,
     );
   }
 
@@ -1475,8 +1533,17 @@ export class SocialActions {
     return this.rest.get("/social/lists");
   }
 
-  createList(input: { name: string; description?: string; isPublic?: boolean }): Promise<{ list: unknown }> {
-    return this.rest.post("/social/lists", input);
+  async createList(input: SocialListCreateOptions): Promise<{ list: unknown }> {
+    const memberIds =
+      input.memberIds === undefined
+        ? undefined
+        : (await resolveUserIds(this.rest, input.memberIds)).map((userId) =>
+            Number(userId),
+          );
+    return this.rest.post("/social/lists", {
+      ...input,
+      memberIds,
+    });
   }
 
   deleteList(id: Snowflake | string): Promise<MessageEnvelope> {
@@ -1487,15 +1554,17 @@ export class SocialActions {
     return this.rest.get(`/social/lists/${encodeId(listId)}/posts`, encodeQuery(query));
   }
 
-  addListMember(listId: Snowflake | string, user: ResourceTarget): Promise<MessageEnvelope> {
+  async addListMember(listId: Snowflake | string, user: ResourceTarget): Promise<MessageEnvelope> {
+    const userId = await resolveUserId(this.rest, user);
     return this.rest.post(`/social/lists/${encodeId(listId)}/members`, {
-      userId: Number(idOf(user)),
+      userId: Number(userId),
     });
   }
 
-  removeListMember(listId: Snowflake | string, user: ResourceTarget): Promise<MessageEnvelope> {
+  async removeListMember(listId: Snowflake | string, user: ResourceTarget): Promise<MessageEnvelope> {
+    const userId = await resolveUserId(this.rest, user);
     return this.rest.delete(
-      `/social/lists/${encodeId(listId)}/members/${encodeId(idOf(user))}`,
+      `/social/lists/${encodeId(listId)}/members/${encodeId(userId)}`,
     );
   }
 
@@ -1511,8 +1580,10 @@ export class SocialActions {
     return this.rest.delete(`/social/stories/${encodeId(id)}`);
   }
 
-  userStories(user: ResourceTarget): Promise<{ stories: unknown[]; pagination?: PageInfo }> {
-    return this.rest.get(`/social/stories/user/${encodeId(idOf(user))}`);
+  async userStories(user: ResourceTarget): Promise<{ stories: unknown[]; pagination?: PageInfo }> {
+    return this.rest.get(
+      `/social/stories/user/${encodeId(await resolveUserId(this.rest, user))}`,
+    );
   }
 
   storyComments(id: Snowflake | string): Promise<{ comments: unknown[]; pagination?: PageInfo }> {
@@ -1559,20 +1630,29 @@ export class SocialActions {
     return this.rest.delete(`/social/questions/${encodeId(id)}`);
   }
 
-  sendQuestion(input: { targetUserId: Snowflake; content: string }): Promise<MessageEnvelope> {
-    return this.rest.post("/social/questions/send", input);
+  async sendQuestion(input: QuestionSendOptions): Promise<MessageEnvelope> {
+    return this.rest.post(
+      "/social/questions/send",
+      await resolveQuestionInput(this.rest, input),
+    );
   }
 
-  sendAnonymousQuestion(input: { targetUserId: Snowflake; content: string }): Promise<MessageEnvelope> {
+  sendAnonymousQuestion(input: QuestionSendOptions): Promise<MessageEnvelope> {
     return this.sendQuestion(input);
   }
 
-  askQuestion(input: { targetUserId: Snowflake; content: string }): Promise<MessageEnvelope> {
-    return this.rest.post("/social/questions/ask", input);
+  async askQuestion(input: QuestionSendOptions): Promise<MessageEnvelope> {
+    return this.rest.post(
+      "/social/questions/ask",
+      await resolveQuestionInput(this.rest, input),
+    );
   }
 
-  postQuestion(input: { targetUserId: Snowflake; content: string }): Promise<MessageEnvelope> {
-    return this.rest.post("/social/questions/post", input);
+  async postQuestion(input: QuestionSendOptions): Promise<MessageEnvelope> {
+    return this.rest.post(
+      "/social/questions/post",
+      await resolveQuestionInput(this.rest, input),
+    );
   }
 
   linkPreview(url: string): Promise<unknown> {
@@ -1639,28 +1719,32 @@ export class RadioActions {
     return this.rest.post(`/radio/${encodeId(idOf(id))}/accept-speaker-invite`);
   }
 
-  inviteSpeaker(id: ResourceTarget, participant: ResourceTarget): Promise<MessageEnvelope> {
+  async inviteSpeaker(id: ResourceTarget, participant: ResourceTarget): Promise<MessageEnvelope> {
+    const participantId = await resolveUserId(this.rest, participant);
     return this.rest.post(
-      `/radio/${encodeId(idOf(id))}/participants/${encodeId(idOf(participant))}/invite-speaker`,
+      `/radio/${encodeId(idOf(id))}/participants/${encodeId(participantId)}/invite-speaker`,
     );
   }
 
-  cancelSpeakerInvite(id: ResourceTarget, participant: ResourceTarget): Promise<MessageEnvelope> {
+  async cancelSpeakerInvite(id: ResourceTarget, participant: ResourceTarget): Promise<MessageEnvelope> {
+    const participantId = await resolveUserId(this.rest, participant);
     return this.rest.delete(
-      `/radio/${encodeId(idOf(id))}/participants/${encodeId(idOf(participant))}/invite-speaker`,
+      `/radio/${encodeId(idOf(id))}/participants/${encodeId(participantId)}/invite-speaker`,
     );
   }
 
-  muteParticipant(id: ResourceTarget, participant: ResourceTarget, isMuted: boolean): Promise<MessageEnvelope> {
+  async muteParticipant(id: ResourceTarget, participant: ResourceTarget, isMuted: boolean): Promise<MessageEnvelope> {
+    const participantId = await resolveUserId(this.rest, participant);
     return this.rest.patch(
-      `/radio/${encodeId(idOf(id))}/participants/${encodeId(idOf(participant))}/mute`,
+      `/radio/${encodeId(idOf(id))}/participants/${encodeId(participantId)}/mute`,
       { isMuted },
     );
   }
 
-  setParticipantRole(id: ResourceTarget, participant: ResourceTarget, role: string): Promise<MessageEnvelope> {
+  async setParticipantRole(id: ResourceTarget, participant: ResourceTarget, role: string): Promise<MessageEnvelope> {
+    const participantId = await resolveUserId(this.rest, participant);
     return this.rest.patch(
-      `/radio/${encodeId(idOf(id))}/participants/${encodeId(idOf(participant))}/role`,
+      `/radio/${encodeId(idOf(id))}/participants/${encodeId(participantId)}/role`,
       { role },
     );
   }
@@ -1755,6 +1839,10 @@ export class ApiKeyActions extends ApiKeysApi {
 }
 
 export class DeveloperActions extends DeveloperApi {
+  constructor(private readonly actionRest: RestClient) {
+    super(actionRest);
+  }
+
   getPost(id: Snowflake | string): ReturnType<DeveloperApi["fetchPost"]> {
     return this.fetchPost(id);
   }
@@ -1767,8 +1855,38 @@ export class DeveloperActions extends DeveloperApi {
     return this.unrekarot(id);
   }
 
-  getUser(id: Snowflake | string): ReturnType<DeveloperApi["fetchUser"]> {
-    return this.fetchUser(id);
+  async getUser(id: ResourceTarget): Promise<Awaited<ReturnType<DeveloperApi["fetchUser"]>>> {
+    return this.fetchUser(await resolveUserId(this.actionRest, id));
+  }
+
+  override async fetchUser(
+    id: ResourceTarget,
+  ): Promise<Awaited<ReturnType<DeveloperApi["fetchUser"]>>> {
+    return super.fetchUser(await resolveUserId(this.actionRest, id));
+  }
+
+  override async userFollowers(
+    id: ResourceTarget,
+  ): Promise<Awaited<ReturnType<DeveloperApi["userFollowers"]>>> {
+    return super.userFollowers(await resolveUserId(this.actionRest, id));
+  }
+
+  override async userFollowing(
+    id: ResourceTarget,
+  ): Promise<Awaited<ReturnType<DeveloperApi["userFollowing"]>>> {
+    return super.userFollowing(await resolveUserId(this.actionRest, id));
+  }
+
+  override async follow(
+    id: ResourceTarget,
+  ): Promise<Awaited<ReturnType<DeveloperApi["follow"]>>> {
+    return super.follow(await resolveUserId(this.actionRest, id));
+  }
+
+  override async unfollow(
+    id: ResourceTarget,
+  ): Promise<Awaited<ReturnType<DeveloperApi["unfollow"]>>> {
+    return super.unfollow(await resolveUserId(this.actionRest, id));
   }
 }
 
@@ -1777,8 +1895,150 @@ export class LegalActions extends LegalApi {}
 export class MiscActions extends MiscApi {}
 
 export class AdminActions extends AdminApi {
-  user(userId: Snowflake | string): ReturnType<AdminApi["fetchUser"]> {
+  constructor(private readonly actionRest: RestClient) {
+    super(actionRest);
+  }
+
+  async user(userId: ResourceTarget): Promise<Awaited<ReturnType<AdminApi["fetchUser"]>>> {
     return this.fetchUser(userId);
+  }
+
+  override async fetchUser(
+    userId: ResourceTarget,
+  ): Promise<Awaited<ReturnType<AdminApi["fetchUser"]>>> {
+    return super.fetchUser(await resolveUserId(this.actionRest, userId));
+  }
+
+  override async banUser(
+    userId: ResourceTarget,
+    input: Parameters<AdminApi["banUser"]>[1] = {},
+  ): Promise<Awaited<ReturnType<AdminApi["banUser"]>>> {
+    return super.banUser(await resolveUserId(this.actionRest, userId), input);
+  }
+
+  override async unbanUser(
+    userId: ResourceTarget,
+  ): Promise<Awaited<ReturnType<AdminApi["unbanUser"]>>> {
+    return super.unbanUser(await resolveUserId(this.actionRest, userId));
+  }
+
+  override async verifyUser(
+    userId: ResourceTarget,
+    body: Parameters<AdminApi["verifyUser"]>[1] = {},
+  ): Promise<Awaited<ReturnType<AdminApi["verifyUser"]>>> {
+    return super.verifyUser(await resolveUserId(this.actionRest, userId), body);
+  }
+
+  override async setUserFlags(
+    userId: ResourceTarget,
+    flags: Parameters<AdminApi["setUserFlags"]>[1],
+  ): Promise<Awaited<ReturnType<AdminApi["setUserFlags"]>>> {
+    return super.setUserFlags(await resolveUserId(this.actionRest, userId), flags);
+  }
+
+  override async updateUserAccount(
+    userId: ResourceTarget,
+    body: Parameters<AdminApi["updateUserAccount"]>[1],
+  ): Promise<Awaited<ReturnType<AdminApi["updateUserAccount"]>>> {
+    return super.updateUserAccount(
+      await resolveUserId(this.actionRest, userId),
+      body,
+    );
+  }
+
+  override async setUserOfficialMark(
+    userId: ResourceTarget,
+    mark: Parameters<AdminApi["setUserOfficialMark"]>[1],
+  ): Promise<Awaited<ReturnType<AdminApi["setUserOfficialMark"]>>> {
+    return super.setUserOfficialMark(
+      await resolveUserId(this.actionRest, userId),
+      mark,
+    );
+  }
+
+  override async setUserEmail(
+    userId: ResourceTarget,
+    email: string,
+  ): Promise<Awaited<ReturnType<AdminApi["setUserEmail"]>>> {
+    return super.setUserEmail(await resolveUserId(this.actionRest, userId), email);
+  }
+
+  override async setUserPassword(
+    userId: ResourceTarget,
+    password: string,
+  ): Promise<Awaited<ReturnType<AdminApi["setUserPassword"]>>> {
+    return super.setUserPassword(
+      await resolveUserId(this.actionRest, userId),
+      password,
+    );
+  }
+
+  override async setUserRole(
+    userId: ResourceTarget,
+    role: string,
+  ): Promise<Awaited<ReturnType<AdminApi["setUserRole"]>>> {
+    return super.setUserRole(await resolveUserId(this.actionRest, userId), role);
+  }
+
+  override async userSessions(
+    userId: ResourceTarget,
+  ): Promise<Awaited<ReturnType<AdminApi["userSessions"]>>> {
+    return super.userSessions(await resolveUserId(this.actionRest, userId));
+  }
+
+  override async userPosts(
+    userId: ResourceTarget,
+  ): Promise<Awaited<ReturnType<AdminApi["userPosts"]>>> {
+    return super.userPosts(await resolveUserId(this.actionRest, userId));
+  }
+
+  override async userReports(
+    userId: ResourceTarget,
+  ): Promise<Awaited<ReturnType<AdminApi["userReports"]>>> {
+    return super.userReports(await resolveUserId(this.actionRest, userId));
+  }
+
+  override async userBans(
+    userId: ResourceTarget,
+  ): Promise<Awaited<ReturnType<AdminApi["userBans"]>>> {
+    return super.userBans(await resolveUserId(this.actionRest, userId));
+  }
+
+  override async userNotes(
+    userId: ResourceTarget,
+  ): Promise<Awaited<ReturnType<AdminApi["userNotes"]>>> {
+    return super.userNotes(await resolveUserId(this.actionRest, userId));
+  }
+
+  override async userHistory(
+    userId: ResourceTarget,
+  ): Promise<Awaited<ReturnType<AdminApi["userHistory"]>>> {
+    return super.userHistory(await resolveUserId(this.actionRest, userId));
+  }
+
+  override async warnUser(
+    userId: ResourceTarget,
+    body: Parameters<AdminApi["warnUser"]>[1] = {},
+  ): Promise<Awaited<ReturnType<AdminApi["warnUser"]>>> {
+    return super.warnUser(await resolveUserId(this.actionRest, userId), body);
+  }
+
+  override async deleteUser(
+    userId: ResourceTarget,
+  ): Promise<Awaited<ReturnType<AdminApi["deleteUser"]>>> {
+    return super.deleteUser(await resolveUserId(this.actionRest, userId));
+  }
+
+  override async userRestrict(
+    userId: ResourceTarget,
+  ): Promise<Awaited<ReturnType<AdminApi["userRestrict"]>>> {
+    return super.userRestrict(await resolveUserId(this.actionRest, userId));
+  }
+
+  override async userSuspend(
+    userId: ResourceTarget,
+  ): Promise<Awaited<ReturnType<AdminApi["userSuspend"]>>> {
+    return super.userSuspend(await resolveUserId(this.actionRest, userId));
   }
 
   post(postId: Snowflake | string): ReturnType<AdminApi["fetchPost"]> {
@@ -2062,6 +2322,34 @@ function usernameOrId(target: ResourceTarget): Snowflake | string {
 
 function stripAt(value: string): string {
   return value.startsWith("@") ? value.slice(1) : value;
+}
+
+async function resolveUserId(
+  rest: RestClient,
+  target: ResourceTarget,
+): Promise<Snowflake | string> {
+  if (typeof target === "object") return target.id;
+  if (typeof target === "number") return target;
+  if (/^\d+$/.test(target)) return target;
+  const detail = await rest.get<UserDetail>(`/users/${encodeId(stripAt(target))}`);
+  return detail.user.id;
+}
+
+function resolveUserIds(
+  rest: RestClient,
+  targets: ResourceTarget[],
+): Promise<Array<Snowflake | string>> {
+  return Promise.all(targets.map((target) => resolveUserId(rest, target)));
+}
+
+async function resolveQuestionInput(
+  rest: RestClient,
+  input: QuestionSendOptions,
+): Promise<{ targetUserId: number; content: string }> {
+  return {
+    targetUserId: Number(await resolveUserId(rest, input.targetUserId)),
+    content: input.content,
+  };
 }
 
 function normalizeVisibility(value: VisibilityOption): Visibility {

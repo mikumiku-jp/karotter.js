@@ -12,6 +12,7 @@ import type {
   MessageEnvelope,
   Pagination,
   Snowflake,
+  JsonObject,
 } from "../../util/types.js";
 import { appendField, appendJson, appendMedia } from "../../util/form.js";
 import { encodeId, encodeQuery } from "../utils.js";
@@ -168,16 +169,25 @@ export class DmApi {
     return this.rest.get(`/dm/groups/${encodeId(groupId)}/call`);
   }
 
-  startCall(groupId: Snowflake | string): Promise<{ call: ActiveCall }> {
-    return this.rest.post(`/dm/groups/${encodeId(groupId)}/call/start`);
+  startCall(
+    groupId: Snowflake | string,
+    body?: JsonObject,
+  ): Promise<{ call: ActiveCall }> {
+    return this.rest.post(`/dm/groups/${encodeId(groupId)}/call/start`, body);
   }
 
-  joinCall(groupId: Snowflake | string): Promise<{ call: ActiveCall }> {
-    return this.rest.post(`/dm/groups/${encodeId(groupId)}/call/join`);
+  joinCall(
+    groupId: Snowflake | string,
+    body?: JsonObject,
+  ): Promise<{ call: ActiveCall }> {
+    return this.rest.post(`/dm/groups/${encodeId(groupId)}/call/join`, body);
   }
 
-  leaveCall(groupId: Snowflake | string): Promise<MessageEnvelope> {
-    return this.rest.post(`/dm/groups/${encodeId(groupId)}/call/leave`);
+  leaveCall(
+    groupId: Snowflake | string,
+    body?: JsonObject,
+  ): Promise<MessageEnvelope> {
+    return this.rest.post(`/dm/groups/${encodeId(groupId)}/call/leave`, body);
   }
 
   editMessage(
