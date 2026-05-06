@@ -1,0 +1,59 @@
+{
+  "name": "karotter.js",
+  "version": "0.1.0",
+  "description": "Karotter API wrapper",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikumiku-jp/karotter.js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mikumiku-jp/karotter.js/issues"
+  },
+  "homepage": "https://github.com/mikumiku-jp/karotter.js#readme",
+  "type": "module",
+  "main": "./dist/cjs/index.cjs",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "docs/README.md",
+    "docs/api-reference.md",
+    "docs/api-spec.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/rename-cjs.mjs && tsc -p tsconfig.types.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "example:timeline": "tsx examples/timeline.ts",
+    "example:login-and-post": "tsx examples/login-and-post.ts"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "node-tls-client": "^2.1.0",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.17",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "license": "MIT",
+  "keywords": [
+    "karotter",
+    "sns",
+    "api",
+    "client",
+    "wrapper",
+    "typescript"
+  ]
+}
