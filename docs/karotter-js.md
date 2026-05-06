@@ -294,8 +294,10 @@ await kt.dm.createGroup(["@alice", "@bob"]);
 await kt.social.createCircle({ name: "friends", memberIds: ["@alice"] });
 await kt.social.sendQuestion({ targetUserId: "@alice", content: "質問" });
 await kt.radio.inviteSpeaker(spaceId, "@alice");
+await kt.auth.switchSession({ userId: "@alice" });
 await kt.developer.getUser("@alice");
 await kt.admin.user("@alice");
+await kt.admin.testRecommend({ userId: "@alice" });
 ```
 
 ## メソッド一覧
@@ -337,7 +339,7 @@ await kt.admin.user("@alice");
 | `revokeSession(sessionId)` | `string` | 指定セッション失効 |
 | `revokeOtherSessions()` | なし | 他セッション失効 |
 | `revokeAllSessions()` | なし | 全セッション失効 |
-| `switchSession(input)` | `{ sessionId?: string; userId?: number }` | セッション切替 |
+| `switchSession(input)` | `{ sessionId?: string; userId?: ResourceTarget }` | セッション切替 |
 | `unreadSnapshots()` | なし | セッション別未読 |
 | `forgotPassword(email)` | `string` | パスワード再設定メール |
 | `resetPassword(token, password)` | `string`, `string` | パスワード再設定 |

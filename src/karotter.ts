@@ -147,6 +147,16 @@ export interface QuestionSendOptions {
   content: string;
 }
 
+export interface SwitchSessionOptions {
+  sessionId?: string;
+  userId?: ResourceTarget;
+}
+
+export interface AdminTestRecommendOptions {
+  limit?: number;
+  userId?: ResourceTarget;
+}
+
 export interface NewsListOptions extends Pagination {
   category?: string;
 }
@@ -498,16 +508,20 @@ export class AuthActions {
     return this.rest.delete("/auth/sessions/all");
   }
 
-  switchSession(input: {
-    sessionId?: string;
-    userId?: Snowflake;
-  }): Promise<{
+  async switchSession(input: SwitchSessionOptions): Promise<{
     accessToken: string;
     refreshToken?: string;
     sessionId: string;
     user: CurrentUser;
   }> {
-    return this.rest.post("/auth/switch-session", input);
+    const userId =
+      input.userId === undefined
+        ? undefined
+        : Number(await resolveUserId(this.rest, input.userId));
+    return this.rest.post("/auth/switch-session", {
+      ...input,
+      userId,
+    });
   }
 
   unreadSnapshots(): Promise<{ snapshots: unknown[] }> {
@@ -2039,6 +2053,19 @@ export class AdminActions extends AdminApi {
     userId: ResourceTarget,
   ): Promise<Awaited<ReturnType<AdminApi["userSuspend"]>>> {
     return super.userSuspend(await resolveUserId(this.actionRest, userId));
+  }
+
+  override async testRecommend(
+    query: AdminTestRecommendOptions = {},
+  ): Promise<Awaited<ReturnType<AdminApi["testRecommend"]>>> {
+    if (query.userId === undefined) {
+      const { userId: _userId, ...rest } = query;
+      return super.testRecommend(rest);
+    }
+    return super.testRecommend({
+      ...query,
+      userId: await resolveUserId(this.actionRest, query.userId),
+    });
   }
 
   post(postId: Snowflake | string): ReturnType<AdminApi["fetchPost"]> {
