@@ -2,6 +2,8 @@
 
 Karotter API を TypeScript から扱うためのクライアントです。公開APIは `karotter.login()` から始める形です。
 
+このREADMEと `docs/` 配下のドキュメントはAIが作成しています。実装と挙動に差がある場合は、ソースコード側を優先してください。
+
 ```bash
 npm install karotter.js
 ```
@@ -148,5 +150,3 @@ npm run build
 ## ライセンス
 
 MIT
-
-ドキュメントはAIが作成しました

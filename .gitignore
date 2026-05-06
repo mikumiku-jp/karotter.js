@@ -3,3 +3,15 @@ node_modules/
 analysis/
 .npm-cache/
 .npm-cach/
+docs/algorithm-notes.md
+docs/apk-0.2.2-analysis.md
+docs/authentication.md
+docs/configuration.md
+docs/dm.md
+docs/error-handling.md
+docs/getting-started.md
+docs/posts.md
+docs/realtime.md
+docs/recipes.md
+docs/security-findings.md
+docs/troubleshooting.md
