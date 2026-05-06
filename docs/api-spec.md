@@ -156,6 +156,8 @@ DM 添付:     /uploads/dm/{uuid}.{ext}
 
 ### 投稿の multipart フィールド（POST `/posts` / PUT `/posts/{id}`）
 
+実サイトは未指定でも `visibility=PUBLIC` と `replyRestriction=EVERYONE` を送る。`isAiGenerated`、`isPromotional`、`isR18`、`hideFromMinors` は boolean string で常に送る。media配列は空でも `mediaAlts=[]`、`mediaSpoilerFlags=[]`、`mediaR18Flags=[]` を送る。poll有効時の既定値は `pollIsAnonymous=true`、`pollDurationHours=24`、`pollOptionImageIndices=[]`。
+
 ```
 content                  string
 parentId                 string | number

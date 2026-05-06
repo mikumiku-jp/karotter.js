@@ -63,6 +63,11 @@ export type ReplyRestrictionOption =
   | Lowercase<ReplyRestriction>
   | ReplyRestriction;
 
+const DEFAULT_POST_VISIBILITY: Visibility = "PUBLIC";
+const DEFAULT_REPLY_RESTRICTION: ReplyRestriction = "EVERYONE";
+const DEFAULT_POLL_DURATION_HOURS = 24;
+const DEFAULT_POLL_IS_ANONYMOUS = true;
+
 export type ResourceTarget =
   | Snowflake
   | string
@@ -626,6 +631,10 @@ export class PostsActions {
     );
   }
 
+  rekarots(target: ResourceTarget, query?: Pagination): Promise<UserList> {
+    return this.reposts(target, query);
+  }
+
   conversation(target: ResourceTarget): Promise<unknown> {
     return this.rest.get(`/posts/${encodeId(idOf(target))}/conversation`);
   }
@@ -1056,6 +1065,14 @@ export class FollowActions {
   showReposts(target: ResourceTarget): Promise<MessageEnvelope> {
     return this.rest.delete(`/follow/hide-rekarots/${encodeId(idOf(target))}`);
   }
+
+  hideRekarots(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.hideReposts(target);
+  }
+
+  showRekarots(target: ResourceTarget): Promise<MessageEnvelope> {
+    return this.showReposts(target);
+  }
 }
 
 export class DmActions {
@@ -1159,6 +1176,22 @@ export class DmConversation {
       buildDmForm(content, options),
     );
     return response.message;
+  }
+
+  sendMedia(
+    content: string,
+    attachments: MediaAttachment[],
+    options: Omit<DmMessageOptions, "attachments" | "poll"> = {},
+  ): Promise<DmMessage> {
+    return this.send(content, { ...options, attachments });
+  }
+
+  sendPoll(
+    content: string,
+    poll: PollDraft,
+    options: Omit<DmMessageOptions, "attachments" | "poll"> = {},
+  ): Promise<DmMessage> {
+    return this.send(content, { ...options, poll });
   }
 
   read(): Promise<MessageEnvelope> {
@@ -1490,6 +1523,10 @@ export class SocialActions {
     return this.rest.post(`/social/stories/${encodeId(id)}/comments`, { content });
   }
 
+  commentOnStory(id: Snowflake | string, content: string): Promise<{ comment: unknown }> {
+    return this.commentStory(id, content);
+  }
+
   storyViewers(id: Snowflake | string): Promise<{ viewers: unknown[] }> {
     return this.rest.get(`/social/stories/${encodeId(id)}/viewers`);
   }
@@ -1506,6 +1543,10 @@ export class SocialActions {
     return this.rest.post(`/social/stories/${encodeId(id)}/views`);
   }
 
+  recordStoryView(id: Snowflake | string): Promise<MessageEnvelope> {
+    return this.viewStory(id);
+  }
+
   questionInbox(): Promise<{ questions: unknown[]; pagination?: PageInfo }> {
     return this.rest.get("/social/questions/inbox");
   }
@@ -1520,6 +1561,10 @@ export class SocialActions {
 
   sendQuestion(input: { targetUserId: Snowflake; content: string }): Promise<MessageEnvelope> {
     return this.rest.post("/social/questions/send", input);
+  }
+
+  sendAnonymousQuestion(input: { targetUserId: Snowflake; content: string }): Promise<MessageEnvelope> {
+    return this.sendQuestion(input);
   }
 
   askQuestion(input: { targetUserId: Snowflake; content: string }): Promise<MessageEnvelope> {
@@ -1693,9 +1738,21 @@ export class BoardsActions extends BoardsApi {
   ): ReturnType<BoardsApi["fetchThread"]> {
     return this.fetchThread(slug, threadId);
   }
+
+  reply(
+    slug: string,
+    threadId: Snowflake | string,
+    form: FormData,
+  ): ReturnType<BoardsApi["replyThread"]> {
+    return this.replyThread(slug, threadId, form);
+  }
 }
 
-export class ApiKeyActions extends ApiKeysApi {}
+export class ApiKeyActions extends ApiKeysApi {
+  rotate(id: Snowflake | string): ReturnType<ApiKeysApi["regenerate"]> {
+    return this.regenerate(id);
+  }
+}
 
 export class DeveloperActions extends DeveloperApi {
   getPost(id: Snowflake | string): ReturnType<DeveloperApi["fetchPost"]> {
@@ -1808,13 +1865,11 @@ function toPostInput(options: PostOptions): CreatePostInput {
   const { visibility, replyRestriction, ...rest } = options;
   const input: CreatePostInput = {
     ...rest,
+    visibility: normalizeVisibility(visibility ?? DEFAULT_POST_VISIBILITY),
+    replyRestriction: normalizeReplyRestriction(
+      replyRestriction ?? DEFAULT_REPLY_RESTRICTION,
+    ),
   };
-  if (visibility !== undefined) {
-    input.visibility = normalizeVisibility(visibility);
-  }
-  if (replyRestriction !== undefined) {
-    input.replyRestriction = normalizeReplyRestriction(replyRestriction);
-  }
   return input;
 }
 
@@ -1833,58 +1888,76 @@ function buildPostForm(
     appendField(form, "questionId", String(input.questionId));
   if (input.excludedMentions && input.excludedMentions.length > 0)
     appendJson(form, "excludedMentions", input.excludedMentions);
-  appendField(form, "isAiGenerated", input.isAiGenerated);
-  appendField(form, "isPromotional", input.isPromotional);
-  appendField(form, "isR18", input.isR18);
-  appendField(form, "hideFromMinors", input.hideFromMinors);
+  const shouldAgeGate =
+    input.minimumAge !== null &&
+    input.minimumAge !== undefined &&
+    input.minimumAge >= 18;
+  appendField(form, "isAiGenerated", input.isAiGenerated ?? false);
+  appendField(form, "isPromotional", input.isPromotional ?? false);
+  appendField(form, "isR18", input.isR18 ?? shouldAgeGate);
+  appendField(form, "hideFromMinors", input.hideFromMinors ?? shouldAgeGate);
   if (input.minimumAge !== null && input.minimumAge !== undefined)
     appendField(form, "minimumAge", String(input.minimumAge));
   if (input.maximumAge !== null && input.maximumAge !== undefined)
     appendField(form, "maximumAge", String(input.maximumAge));
-  if (input.visibility) appendField(form, "visibility", input.visibility);
+  appendField(form, "visibility", input.visibility ?? DEFAULT_POST_VISIBILITY);
   if (input.viewerCircleId !== undefined)
     appendField(form, "viewerCircleId", String(input.viewerCircleId));
-  if (input.replyRestriction)
-    appendField(form, "replyRestriction", input.replyRestriction);
+  appendField(
+    form,
+    "replyRestriction",
+    input.replyRestriction ?? DEFAULT_REPLY_RESTRICTION,
+  );
   if (input.replyCircleId !== undefined)
     appendField(form, "replyCircleId", String(input.replyCircleId));
-  if (input.scheduledFor) appendField(form, "scheduledFor", input.scheduledFor);
+  if (input.scheduledFor) {
+    const scheduledFor =
+      input.scheduledFor instanceof Date
+        ? input.scheduledFor.toISOString()
+        : input.scheduledFor;
+    appendField(form, "scheduledFor", scheduledFor);
+  }
   if (input.poll) {
     appendJson(form, "pollOptions", input.poll.options);
-    if (typeof input.poll.durationHours === "number")
-      appendField(form, "pollDurationHours", String(input.poll.durationHours));
-    if (typeof input.poll.isAnonymous === "boolean")
-      appendField(form, "pollIsAnonymous", input.poll.isAnonymous);
-    if (input.poll.optionImages && input.poll.optionImages.length > 0) {
-      appendJson(
-        form,
-        "pollOptionImageIndices",
-        input.poll.optionImages.map((entry) => entry.index),
-      );
-      for (const entry of input.poll.optionImages) {
+    appendField(
+      form,
+      "pollDurationHours",
+      String(input.poll.durationHours ?? DEFAULT_POLL_DURATION_HOURS),
+    );
+    appendField(
+      form,
+      "pollIsAnonymous",
+      input.poll.isAnonymous ?? DEFAULT_POLL_IS_ANONYMOUS,
+    );
+    const pollOptionImages = input.poll.optionImages ?? [];
+    appendJson(
+      form,
+      "pollOptionImageIndices",
+      pollOptionImages.map((entry) => entry.index),
+    );
+    if (pollOptionImages.length > 0) {
+      for (const entry of pollOptionImages) {
         appendMedia(form, "pollOptionImages", entry.file);
       }
     }
   }
   const media = input.media ?? [];
   for (const item of media) appendMedia(form, "media", item.file);
-  if (media.length > 0) {
-    appendJson(
-      form,
-      "mediaAlts",
-      media.map((item) => item.alt ?? ""),
-    );
-    appendJson(
-      form,
-      "mediaSpoilerFlags",
-      media.map((item) => Boolean(item.spoiler)),
-    );
-    appendJson(
-      form,
-      "mediaR18Flags",
-      media.map((item) => Boolean(item.r18)),
-    );
-  }
+  appendJson(
+    form,
+    "mediaAlts",
+    media.map((item) => item.alt ?? ""),
+  );
+  appendJson(
+    form,
+    "mediaSpoilerFlags",
+    media.map((item) => Boolean(item.spoiler)),
+  );
+  appendJson(
+    form,
+    "mediaR18Flags",
+    media.map((item) => Boolean(item.r18)),
+  );
   return form;
 }
 

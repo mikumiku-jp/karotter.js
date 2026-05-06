@@ -312,6 +312,10 @@ Turnstile:
 
 `POST /posts` と `PUT /posts/{id}` は `multipart/form-data`。
 
+実サイトの通常投稿では `visibility=PUBLIC` と `replyRestriction=EVERYONE` を常に送ります。`isAiGenerated`、`isPromotional`、`isR18`、`hideFromMinors` も boolean string として常に送ります。年齢指定がない場合は `false`、`minimumAge >= 18` の場合は `isR18=true` と `hideFromMinors=true` です。media配列は空でも `mediaAlts=[]`、`mediaSpoilerFlags=[]`、`mediaR18Flags=[]` を送ります。
+
+pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDurationHours=24`、`pollOptionImageIndices=[]` です。
+
 | Field | 型 | 備考 |
 |---|---|---|
 | `content` | string | 本文 |
@@ -838,6 +842,190 @@ Base: `/control-room-x9k2`
 /verification-requests
 /webhooks
 ```
+
+## Payload 詳細
+
+### 登録
+
+`POST /auth/register` はJSONです。Web版ではTurnstile token必須、Android WebView相当では空文字tokenで通る経路を観測しています。
+
+```ts
+interface RegisterPayload {
+  email: string;
+  username: string;
+  password: string;
+  gender: "MALE" | "FEMALE" | "OTHER";
+  birthday: string | null;
+  acceptTerms: boolean;
+  acceptPrivacy: boolean;
+  turnstileToken?: string;
+  _ts: number;
+}
+```
+
+SDKの `auth.register()` / `Karotter.register()` は `gender` 未指定なら `OTHER`、`birthday` 未指定なら `2000-01-01`、`acceptTerms` と `acceptPrivacy` 未指定なら `true` を送ります。
+
+### ログイン
+
+`POST /auth/login` はJSONです。
+
+```ts
+interface LoginPayload {
+  identifier: string;
+  password: string;
+  deviceId: string;
+  clientType: "web" | "ios" | "android";
+  deviceName?: string;
+}
+```
+
+成功時は `accessToken`、`refreshToken`、`sessionId`、`deviceId`、`user` が返ります。Cookieにも `karotter_at`、`karotter_rt`、`karotter_csrf` が入ります。
+
+### 投稿作成・編集
+
+投稿と編集はmultipartです。SDKは実サイトに合わせて未指定の既定値も送ります。
+
+```ts
+interface CreatePostPayload {
+  content?: string;
+  parentId?: string | number;
+  quotedPostId?: string | number;
+  questionId?: string | number;
+  excludedMentions?: number[];
+  isAiGenerated: boolean;
+  isPromotional: boolean;
+  isR18: boolean;
+  hideFromMinors: boolean;
+  minimumAge?: number;
+  maximumAge?: number;
+  visibility: "PUBLIC" | "FOLLOWERS" | "CIRCLE";
+  viewerCircleId?: string | number;
+  replyRestriction: "EVERYONE" | "FOLLOWING" | "MENTIONED" | "CIRCLE";
+  replyCircleId?: string | number;
+  scheduledFor?: string;
+  pollOptions?: string[];
+  pollIsAnonymous?: boolean;
+  pollDurationHours?: number;
+  pollOptionImageIndices?: number[];
+  pollOptionImages?: File[];
+  media?: File[];
+  mediaAlts: string[];
+  mediaSpoilerFlags: boolean[];
+  mediaR18Flags: boolean[];
+}
+```
+
+既定値:
+
+| Field | SDK / Web既定値 |
+|---|---|
+| `visibility` | `PUBLIC` |
+| `replyRestriction` | `EVERYONE` |
+| `isAiGenerated` | `false` |
+| `isPromotional` | `false` |
+| `isR18` | `false`。`minimumAge >= 18` のとき未指定なら `true` |
+| `hideFromMinors` | `false`。`minimumAge >= 18` のとき未指定なら `true` |
+| `mediaAlts` | `[]` |
+| `mediaSpoilerFlags` | `[]` |
+| `mediaR18Flags` | `[]` |
+| `pollIsAnonymous` | poll有効時 `true` |
+| `pollDurationHours` | poll有効時 `24` |
+| `pollOptionImageIndices` | poll有効時 `[]` |
+
+制約:
+
+| 条件 | 必須 |
+|---|---|
+| `visibility=CIRCLE` | `viewerCircleId` |
+| `replyRestriction=CIRCLE` | `replyCircleId` |
+| 通常投稿 | `content`、`media`、`poll` のどれか |
+| poll | `options` は2件以上 |
+| media | 最大4件 |
+
+返信は `parentId`、引用は `quotedPostId` を使います。返信と引用は同時指定も型上は可能ですが、実サイトUIでは別操作です。
+
+### DM送信
+
+DM送信はmultipartです。投稿と違い、ファイルのフィールド名は `attachments` です。
+
+```ts
+interface DmMessagePayload {
+  content?: string;
+  replyToId?: string | number;
+  attachments?: File[];
+  attachmentAlts?: string[];
+  attachmentSpoilerFlags?: boolean[];
+  attachmentR18Flags?: boolean[];
+  pollOptions?: string[];
+  pollDurationHours?: number;
+}
+```
+
+本文、添付、pollのどれかが必要です。添付配列は `attachmentAlts`、`attachmentSpoilerFlags`、`attachmentR18Flags` と同じ順序で対応します。
+
+### Story
+
+`POST /social/stories` はmultipartです。SDKは `FormData` をそのまま渡す形です。
+
+| Field | 型 | 備考 |
+|---|---|---|
+| `media` | File | 画像または動画 |
+| `caption` | string | 本文 |
+| `textOverlay` | string | 画面上テキスト |
+| `textOverlayStyle` | JSON | 位置や色 |
+| `visibility` | `PUBLIC` / `FOLLOWERS` / `CIRCLE` | 公開範囲 |
+| `viewerCircleId` | number/string | CIRCLE時 |
+| `minimumAge` / `maximumAge` | number | 年齢制限 |
+| `isR18` / `hideFromMinors` | boolean string | 年齢制限 |
+
+### News
+
+`POST /news` と `PUT /news/{slugOrId}` はJSONまたはmultipartを受けます。画像を含める場合は `FormData`、テキストだけならJSONで足ります。
+
+```ts
+interface NewsArticleInput {
+  title: string;
+  body: string;
+  category?: string;
+  summary?: string;
+  thumbnailUrl?: string;
+  publishedAt?: string;
+}
+```
+
+`POST /news/{slugOrId}/submit` でレビュー提出、`/news/admin/{id}/review` で管理者レビューです。
+
+### Boards
+
+board threadとreply作成はmultipartです。
+
+| Field | 型 | 備考 |
+|---|---|---|
+| `title` | string | thread作成時 |
+| `content` | string | thread/reply本文 |
+| `images` | File[] | 添付画像 |
+
+リアクションはJSON `{ "emoji": "👍" }` です。
+
+### Report / Contact
+
+```ts
+interface ContactPayload {
+  name: string;
+  email: string;
+  subject?: string;
+  body: string;
+}
+
+interface ReportPayload {
+  targetType: "USER" | "POST" | "DM" | string;
+  targetId: number | string;
+  reason: string;
+  description?: string;
+}
+```
+
+`POST /reports` は10回/900秒の制限を観測しています。
 
 ## Socket.IO
 

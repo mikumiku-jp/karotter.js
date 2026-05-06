@@ -23,11 +23,7 @@
   },
   "files": [
     "dist",
-    "README.md",
-    "docs/README.md",
-    "docs/karotter-js.md",
-    "docs/api-reference.md",
-    "docs/api-spec.md"
+    "README.md"
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/rename-cjs.mjs && tsc -p tsconfig.types.json",

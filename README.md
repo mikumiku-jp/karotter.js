@@ -104,7 +104,7 @@ kt.on("dm:new-message", ({ message }) => {
 
 既知のHTTP endpointは `kt.auth`、`kt.posts`、`kt.timeline`、`kt.users`、`kt.follows`、`kt.dm`、`kt.notifications`、`kt.search`、`kt.social`、`kt.radio`、`kt.draw`、`kt.news`、`kt.boards`、`kt.apiKeys`、`kt.developer`、`kt.legal`、`kt.misc`、`kt.admin` から扱えます。
 
-未調査の新規endpointや一時的な検証には `request()` も残しています。
+一時的な検証には `request()` も残しています。通常利用のendpointは名前空間APIから呼べます。
 
 ```ts
 const raw = await kt.request("GET", "/posts/631800");
@@ -134,10 +134,12 @@ try {
 
 | ドキュメント | 内容 |
 |---|---|
-| [docs/README.md](./docs/README.md) | karotter.js の使い方 |
-| [docs/karotter-js.md](./docs/karotter-js.md) | SDKの説明書、公開メソッド一覧、payload、エラー |
-| [docs/api-reference.md](./docs/api-reference.md) | リバースエンジニアリングで確認したHTTP API |
-| [docs/api-spec.md](./docs/api-spec.md) | 解析メモ寄りの内部仕様 |
+| [docs/README.md](https://github.com/mikumiku-jp/karotter.js/blob/main/docs/README.md) | karotter.js の使い方 |
+| [docs/karotter-js.md](https://github.com/mikumiku-jp/karotter.js/blob/main/docs/karotter-js.md) | SDKの説明書、公開メソッド一覧、payload、エラー |
+| [docs/api-reference.md](https://github.com/mikumiku-jp/karotter.js/blob/main/docs/api-reference.md) | リバースエンジニアリングで確認したHTTP API |
+| [docs/api-spec.md](https://github.com/mikumiku-jp/karotter.js/blob/main/docs/api-spec.md) | 解析メモ寄りの内部仕様 |
+
+npm tarballには詳細docsを含めません。GitHub上の最新版を参照してください。
 
 ## 開発
 

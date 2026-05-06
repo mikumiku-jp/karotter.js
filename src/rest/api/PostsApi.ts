@@ -17,7 +17,9 @@ import type {
   OffsetPagination,
   PageInfo,
   Pagination,
+  ReplyRestriction,
   Snowflake,
+  Visibility,
 } from "../../util/types.js";
 import { appendField, appendJson, appendMedia } from "../../util/form.js";
 import { encodeId, encodeQuery } from "../utils.js";
@@ -45,6 +47,11 @@ export interface PostListResponse {
   posts: Post[];
   pagination?: PageInfo;
 }
+
+const DEFAULT_POST_VISIBILITY: Visibility = "PUBLIC";
+const DEFAULT_REPLY_RESTRICTION: ReplyRestriction = "EVERYONE";
+const DEFAULT_POLL_DURATION_HOURS = 24;
+const DEFAULT_POLL_IS_ANONYMOUS = true;
 
 export interface BookmarkListQuery extends Pagination {
   folderId?: Snowflake | string;
@@ -424,19 +431,26 @@ function buildPostForm(
     appendField(form, "questionId", String(input.questionId));
   if (input.excludedMentions && input.excludedMentions.length > 0)
     appendJson(form, "excludedMentions", input.excludedMentions);
-  appendField(form, "isAiGenerated", input.isAiGenerated);
-  appendField(form, "isPromotional", input.isPromotional);
-  appendField(form, "isR18", input.isR18);
-  appendField(form, "hideFromMinors", input.hideFromMinors);
+  const shouldAgeGate =
+    input.minimumAge !== null &&
+    input.minimumAge !== undefined &&
+    input.minimumAge >= 18;
+  appendField(form, "isAiGenerated", input.isAiGenerated ?? false);
+  appendField(form, "isPromotional", input.isPromotional ?? false);
+  appendField(form, "isR18", input.isR18 ?? shouldAgeGate);
+  appendField(form, "hideFromMinors", input.hideFromMinors ?? shouldAgeGate);
   if (input.minimumAge !== null && input.minimumAge !== undefined)
     appendField(form, "minimumAge", String(input.minimumAge));
   if (input.maximumAge !== null && input.maximumAge !== undefined)
     appendField(form, "maximumAge", String(input.maximumAge));
-  if (input.visibility) appendField(form, "visibility", input.visibility);
+  appendField(form, "visibility", input.visibility ?? DEFAULT_POST_VISIBILITY);
   if (input.viewerCircleId !== undefined)
     appendField(form, "viewerCircleId", String(input.viewerCircleId));
-  if (input.replyRestriction)
-    appendField(form, "replyRestriction", input.replyRestriction);
+  appendField(
+    form,
+    "replyRestriction",
+    input.replyRestriction ?? DEFAULT_REPLY_RESTRICTION,
+  );
   if (input.replyCircleId !== undefined)
     appendField(form, "replyCircleId", String(input.replyCircleId));
   if (input.scheduledFor) {
@@ -448,28 +462,33 @@ function buildPostForm(
   }
   if (input.poll) {
     appendJson(form, "pollOptions", input.poll.options);
-    if (typeof input.poll.durationHours === "number")
-      appendField(form, "pollDurationHours", String(input.poll.durationHours));
-    if (typeof input.poll.isAnonymous === "boolean")
-      appendField(form, "pollIsAnonymous", input.poll.isAnonymous);
-    if (input.poll.optionImages && input.poll.optionImages.length > 0) {
-      appendJson(
-        form,
-        "pollOptionImageIndices",
-        input.poll.optionImages.map((entry) => entry.index),
-      );
-      for (const entry of input.poll.optionImages) {
+    appendField(
+      form,
+      "pollDurationHours",
+      String(input.poll.durationHours ?? DEFAULT_POLL_DURATION_HOURS),
+    );
+    appendField(
+      form,
+      "pollIsAnonymous",
+      input.poll.isAnonymous ?? DEFAULT_POLL_IS_ANONYMOUS,
+    );
+    const pollOptionImages = input.poll.optionImages ?? [];
+    appendJson(
+      form,
+      "pollOptionImageIndices",
+      pollOptionImages.map((entry) => entry.index),
+    );
+    if (pollOptionImages.length > 0) {
+      for (const entry of pollOptionImages) {
         appendMedia(form, "pollOptionImages", entry.file);
       }
     }
   }
   const media = input.media ?? [];
   for (const item of media) appendMedia(form, "media", item.file);
-  if (media.length > 0) {
-    appendJson(form, "mediaAlts", media.map((m) => m.alt ?? ""));
-    appendJson(form, "mediaSpoilerFlags", media.map((m) => Boolean(m.spoiler)));
-    appendJson(form, "mediaR18Flags", media.map((m) => Boolean(m.r18)));
-  }
+  appendJson(form, "mediaAlts", media.map((m) => m.alt ?? ""));
+  appendJson(form, "mediaSpoilerFlags", media.map((m) => Boolean(m.spoiler)));
+  appendJson(form, "mediaR18Flags", media.map((m) => Boolean(m.r18)));
   return form;
 }
 
