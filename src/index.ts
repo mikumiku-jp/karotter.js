@@ -30,6 +30,7 @@ export {
   type DmGroup,
   type DmMessage,
   type DmMessageOptions,
+  type FetchOptions,
   type LoginOptions,
   type KarotterOptions,
   type MediaPostOptions,
@@ -39,6 +40,8 @@ export {
   type PostList,
   type PostOptions,
   type PostSearchOptions,
+  type NotificationListOptions,
+  type NotificationReadAllOptions,
   type QuoteList,
   type ReplyList,
   type RequestInput,
@@ -46,10 +49,19 @@ export {
   type SearchOptions,
   type SearchResult,
   type TimelineOptions,
+  type SwitchSessionOptions,
   type TokenLoginOptions,
   type UserList,
   type VisibilityOption,
 } from "./karotter.js";
+
+export { isProReactionCode } from "./structures/Post.js";
+export {
+  SUBSCRIPTION_PLAN_CAPABILITIES,
+  getActiveSubscriptionPlan,
+  getSubscriptionPlanCapabilities,
+  getSubscriptionUploadLimit,
+} from "./structures/Subscription.js";
 
 export {
   KarotterError,
@@ -108,6 +120,7 @@ export type {
   RegisterInput,
   SessionInfo,
   SessionUnreadSnapshot,
+  SessionUnreadSnapshotInput,
   SwitchSessionInput,
   SwitchSessionResult,
   TwoFactorChallenge,
@@ -129,6 +142,8 @@ export type {
   PostAnalytics,
   PostDraft,
   ReactionEntry,
+  ProReactionCode,
+  ReactionCode,
   ReactionSummary,
   ScheduledPost,
   TimelineMode,
@@ -137,9 +152,12 @@ export type {
 } from "./structures/Post.js";
 export type {
   CurrentUser,
+  DmRequestPolicy,
   OfficialMarkColor,
+  ProfileVisibility,
   User,
   UserDetail,
+  UserRelationship,
 } from "./structures/User.js";
 export type {
   Board,
@@ -149,6 +167,7 @@ export type {
 export type {
   ActiveCall,
   DmAttachment,
+  CreateDmGroupOptions,
   DmFile,
   DmGroupSettings,
   SendDmInput,
@@ -215,10 +234,48 @@ export type {
 } from "./structures/Guild.js";
 export type {
   CheckoutSession,
+  PremiumBadgeColor,
+  KnownSubscriptionPlanCode,
+  SubscriptionCheckoutInput,
+  SubscriptionEntitlements,
   SubscriptionGift,
+  SubscriptionGiftCheckoutInput,
+  SubscriptionGiftResponse,
+  SubscriptionGiftResponseAction,
+  SubscriptionGiftResponseInput,
+  SubscriptionGiftStatus,
+  SubscriptionOverview,
+  SubscriptionPlanCapabilities,
   SubscriptionPlan,
+  SubscriptionPlanCode,
+  SubscriptionPreferences,
+  SubscriptionProductCode,
+  SubscriptionRecord,
+  SubscriptionStatus,
+  SubscriptionState,
   SubscriptionSummary,
 } from "./structures/Subscription.js";
+export type {
+  FollowRequest,
+  FollowRequestAction,
+} from "./rest/api/FollowApi.js";
+export type {
+  ProfileUpdate,
+  PinnedPostUpdate,
+  PinnedPostUpdateResponse,
+  StatusUpdate,
+  UserSettings,
+  UserListQuery,
+  UsernameQuota,
+} from "./rest/api/UsersApi.js";
+export type {
+  NotificationListQuery,
+  NotificationReadAllInput,
+  PushRegistrationInput,
+} from "./rest/api/NotificationsApi.js";
+export type { FetchPostQuery } from "./rest/api/PostsApi.js";
+export type { PostSearchQuery, SearchQuery } from "./rest/api/SearchApi.js";
+export type { StoryListQuery } from "./rest/api/SocialApi.js";
 export type {
   OAuthAuthorizeInput,
   OAuthClient,

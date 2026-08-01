@@ -8,10 +8,10 @@ export type FollowRequestAction = "accept" | "reject";
 
 export interface FollowRequest {
   id: Snowflake;
-  requesterId?: Snowflake;
-  targetUserId?: Snowflake;
-  requester?: User;
-  targetUser?: User;
+  sender: User;
+  recipient?: User;
+  senderId?: Snowflake;
+  recipientId?: Snowflake;
   createdAt?: IsoDate;
   [extra: string]: unknown;
 }

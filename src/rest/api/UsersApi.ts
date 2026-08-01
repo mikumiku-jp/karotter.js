@@ -1,5 +1,10 @@
 import type { RestClient } from "../RestClient.js";
-import type { UserDetail, User } from "../../structures/User.js";
+import type {
+  DmRequestPolicy,
+  ProfileVisibility,
+  UserDetail,
+  User,
+} from "../../structures/User.js";
 import type {
   Gender,
   MessageEnvelope,
@@ -16,8 +21,10 @@ export interface ProfileUpdate {
   bio?: string;
   websiteUrl?: string;
   location?: string;
-  birthday?: string;
-  birthdayVisibility?: "PUBLIC" | "FOLLOWERS" | "PRIVATE";
+  birthday?: string | null;
+  displayBirthday?: string | null;
+  birthdayVisibility?: ProfileVisibility;
+  birthdayBalloonsEnabled?: boolean;
   gender?: Gender;
 }
 
@@ -28,12 +35,14 @@ export interface StatusUpdate {
 
 export interface UserSettings {
   isPrivate?: boolean;
-  onlineStatusVisibility?: string;
+  onlineStatusVisibility?: ProfileVisibility;
   showLikedPosts?: boolean;
   showReadReceipts?: boolean;
   directMessagesEnabled?: boolean;
+  questionsEnabled?: boolean;
+  giftsEnabled?: boolean;
   mutedKeywords?: string[];
-  dmRequestPolicy?: string;
+  dmRequestPolicy?: DmRequestPolicy;
   notifyLikes?: boolean;
   notifyRekarots?: boolean;
   notifyReplies?: boolean;
@@ -42,6 +51,12 @@ export interface UserSettings {
   notifyQuotes?: boolean;
   notifyReactions?: boolean;
   notifyDMs?: boolean;
+  notifyBoardActivity?: boolean;
+  notifyNewsOnLaunch?: boolean;
+  notificationToastEnabled?: boolean;
+  notificationToastPosition?: string;
+  notificationToastDurationMs?: number;
+  showReactions?: boolean;
   notificationMuteNonFollowing?: boolean;
   notificationMuteNonFollowers?: boolean;
   notificationMuteNewAccounts?: boolean;
@@ -50,9 +65,29 @@ export interface UserSettings {
   showParodyAccounts?: boolean;
   showBotAccounts?: boolean;
   showR18Content?: boolean;
+  showRepliesInTimeline?: boolean;
+  showRekarotsInTimeline?: boolean;
+  hideUnfollowedRekarotsInTimeline?: boolean;
+  defaultExcludeReplyTargets?: boolean;
+  levelEnabled?: boolean;
   isBotAccount?: boolean;
   isParodyAccount?: boolean;
+  profileMinimumAge?: number | null;
+  profileMaximumAge?: number | null;
   hideProfileFromMinors?: boolean;
+  pushNotificationsEnabled?: boolean;
+  legalNoticeSeenVersion?: string | null;
+}
+
+export interface PinnedPostUpdate {
+  postId: Snowflake | string | null;
+  pinned: boolean;
+}
+
+export interface PinnedPostUpdateResponse extends MessageEnvelope {
+  pinnedPostId?: Snowflake | null;
+  pinnedPostIds?: Snowflake[];
+  pinnedPostLimit?: number;
 }
 
 export interface UsernameQuota {
@@ -64,6 +99,10 @@ export interface UsernameQuota {
 
 export interface UserFetchQuery {
   includeMutedOrBlocked?: boolean;
+}
+
+export interface UserListQuery extends Pagination {
+  q?: string;
 }
 
 export class UsersApi {
@@ -92,17 +131,17 @@ export class UsersApi {
     return this.rest.get(`/users/${encodeId(userId)}/replies`, encodeQuery(query));
   }
 
-  followers(userId: Snowflake | string, query?: Pagination): Promise<UserListResponse> {
+  followers(userId: Snowflake | string, query?: UserListQuery): Promise<UserListResponse> {
     return this.rest.get(`/users/${encodeId(userId)}/followers`, encodeQuery(query));
   }
 
-  following(userId: Snowflake | string, query?: Pagination): Promise<UserListResponse> {
+  following(userId: Snowflake | string, query?: UserListQuery): Promise<UserListResponse> {
     return this.rest.get(`/users/${encodeId(userId)}/following`, encodeQuery(query));
   }
 
   mutualFollowers(
     userId: Snowflake | string,
-    query?: Pagination,
+    query?: UserListQuery,
   ): Promise<UserListResponse> {
     return this.rest.get(
       `/users/${encodeId(userId)}/mutual-followers`,
@@ -150,12 +189,11 @@ export class UsersApi {
   }
 
   setPinnedPost(
-    postId: Snowflake | null,
-  ): Promise<{ message: string; pinnedPostId: Snowflake | null }> {
-    return this.rest.patch(
-      "/users/profile/pinned-post",
-      postId === null ? {} : { postId },
-    );
+    postId: Snowflake | string | null,
+    pinned = postId !== null,
+  ): Promise<PinnedPostUpdateResponse> {
+    const input: PinnedPostUpdate = { postId, pinned };
+    return this.rest.patch("/users/profile/pinned-post", input);
   }
 
   levelRanking(query?: Pagination): Promise<{ users: User[] }> {

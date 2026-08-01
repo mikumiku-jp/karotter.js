@@ -1,12 +1,14 @@
 import type { RestClient } from "../RestClient.js";
 import type {
   ActiveCall,
+  CreateDmGroupOptions,
   DmFile,
   DmGroup,
   DmGroupSettings,
   DmMessage,
   SendDmInput,
 } from "../../structures/Dm.js";
+import type { ReactionCode } from "../../structures/Post.js";
 import type {
   CursorPagination,
   MessageEnvelope,
@@ -60,9 +62,14 @@ export class DmApi {
     return this.rest.get("/dm/unread/count");
   }
 
-  createGroup(userIds: Array<Snowflake | string>): Promise<{ group: DmGroup }> {
+  createGroup(
+    userIds: Array<Snowflake | string>,
+    options: CreateDmGroupOptions = {},
+  ): Promise<{ group: DmGroup }> {
     return this.rest.post("/dm/groups", {
       userIds: userIds.map((id) => Number(id)),
+      name: options.name?.trim() || null,
+      isGroup: options.isGroup ?? userIds.length > 1,
     });
   }
 
@@ -213,7 +220,7 @@ export class DmApi {
 
   reactToMessage(
     messageId: Snowflake | string,
-    emoji: string,
+    emoji: ReactionCode,
   ): Promise<MessageEnvelope> {
     return this.rest.post(`/dm/messages/${encodeId(messageId)}/reactions`, {
       emoji,
@@ -318,7 +325,7 @@ export class DmApi {
 
   removeReaction(
     messageId: Snowflake | string,
-    emoji?: string,
+    emoji?: ReactionCode,
   ): Promise<MessageEnvelope> {
     if (emoji !== undefined) {
       return this.rest.delete(

@@ -14,6 +14,7 @@ export interface SearchQuery {
   page?: number;
   limit?: number;
   cursor?: string | number;
+  compact?: boolean | "1";
 }
 
 export interface PostSearchQuery extends SearchQuery {

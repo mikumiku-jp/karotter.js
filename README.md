@@ -161,15 +161,77 @@ await botClient.bot.upsertCommand({
 });
 ```
 
-## Subscription と OAuth Client
+## Subscription、Pro、非公開アカウント
 
 ```ts
-const plans = await client.subscriptions.plans();
-const subscription = await client.subscriptions.me();
-const oauthClients = await client.oauth.clients();
+import {
+  getActiveSubscriptionPlan,
+  getSubscriptionPlanCapabilities,
+} from "@mikumiku-jp/karotter.js";
 
-console.log(plans.plans, subscription.summary, oauthClients.clients);
+const catalog = await client.subscriptions.plans();
+const subscription = await client.subscriptions.me();
+const activePlan = getActiveSubscriptionPlan(client.user);
+const capabilities = getSubscriptionPlanCapabilities(activePlan);
+
+const postId = 123;
+const messageId = 456;
+const groupId = 234;
+const boardSlug = "typescript";
+const threadId = 789;
+
+await client.users.setPinnedPost(postId, true);
+await client.posts.react(postId, "pro:arigato");
+await client.dm.group(groupId).react(messageId, "pro:arigato");
+await client.boards.reactThread(boardSlug, threadId, "pro:arigato");
+await client.channels.reactToMessage(messageId, "pro:arigato");
+
+console.log(catalog, subscription, capabilities);
 ```
+
+Plus・Pro の Checkout、Gift、Badge、Profile・Card 装飾に加え、投稿文字数、複数固定、返信 boost、Pro upload 上限、投稿・DM・Board・Guild の Pro reaction を型付きで扱えます。
+
+非公開アカウントは設定、フォロー申請、承認・拒否、follower 削除、公開範囲を扱えます。
+
+```ts
+await client.users.updateSettings({
+  isPrivate: true,
+  showLikedPosts: false,
+  dmRequestPolicy: "FOLLOWERS_ONLY",
+});
+
+const { requests } = await client.follows.pendingRequests();
+const request = requests[0];
+
+if (request) {
+  await client.follows.respondToRequest(request, "accept");
+}
+```
+
+## セッション、DM、通知
+
+```ts
+const sessions = await client.auth.sessions();
+const sessionIds = sessions.sessions.map((session) => session.id);
+const snapshots = await client.auth.unreadSnapshots({ sessionIds });
+
+const group = await client.dm.createGroup(["alice", "bob"], {
+  name: "release team",
+  isGroup: true,
+});
+
+const notifications = await client.notifications.list({
+  page: 1,
+  limit: 30,
+  types: ["MENTION", "DM"],
+});
+await client.notifications.readAll({ types: ["MENTION", "DM"] });
+await client.notifications.registerPush({ token: "push-token" });
+
+console.log(group.id, snapshots.snapshots, notifications.notifications);
+```
+
+セッション切替と未読 snapshot は端末情報を自動補完します。通知種別は一覧と一括既読の query に comma 区切りで送信し、Push 登録は `platform` と `deviceId` を自動補完します。
 
 OAuth 2 認可コードフロー、PKCE、Token 更新、UserInfo にも対応します。
 
@@ -232,7 +294,7 @@ client.connect();
 |---|---|
 | `auth` | CSRF、セッション、2FA、規約クイズ、OAuth 接続解除 |
 | `posts`, `timeline` | 投稿、公開フィード、予約投稿、翻訳、下書き |
-| `users`, `follows` | ユーザー、ランキング、フォロー、ブロック、ミュート |
+| `users`, `follows` | ユーザー、非公開設定、フォロー申請、ブロック、ミュート |
 | `dm`, `notifications` | DM、通話、未読数、通知、Push |
 | `search`, `social` | 検索、Community 検索、Circle、List、Story、質問 |
 | `communities` | Community、メンバー、ルール、レポート、ホーム表示 |
@@ -240,7 +302,7 @@ client.connect();
 | `guildBots`, `bot` | Guild Bot Application・Token、Bot Token API |
 | `radio`, `draw` | Space、リアルタイム Token、絵チャット |
 | `news`, `boards` | ニュースと掲示板 |
-| `subscriptions`, `oauth` | Subscription、Gift、OAuth Client、OAuth 2 認可コードフロー |
+| `subscriptions`, `oauth` | Plus・Pro、権利、装飾、Gift、OAuth Client、OAuth 2 認可コードフロー |
 | `apiKeys`, `developer` | API Key、公開 Developer API、Schema、Twitter v2 互換 API |
 | `legal`, `misc`, `admin` | 規約、通報、音声アップロード、管理 API |
 
@@ -279,8 +341,7 @@ try {
 
 - [利用ガイド](./docs/README.md)
 - [SDK リファレンス](./docs/karotter-js.md)
-- [HTTP API リファレンス](./docs/api-reference.md)
-- [HTTP・認証・リアルタイム仕様](./docs/api-spec.md)
+- [Karotter API リファレンス](./docs/karotter-api/README.md)
 
 ## 開発
 
@@ -293,4 +354,4 @@ node scripts/smoke.mjs
 
 ## ライセンス
 
-MIT
+[GNU Affero General Public License v3.0 only](./LICENSE)

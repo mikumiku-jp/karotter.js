@@ -4,7 +4,7 @@ import type { DmGroup, DmMessage } from "../../structures/Dm.js";
 import type { NewsArticle, NewsArticleInput } from "../../structures/News.js";
 import type { Notification, NotificationType } from "../../structures/Notification.js";
 import type { ApiKey } from "../../structures/Auth.js";
-import type { Post } from "../../structures/Post.js";
+import type { Post, ReactionCode } from "../../structures/Post.js";
 import type { Hashtag } from "../../structures/Social.js";
 import type { User } from "../../structures/User.js";
 import type { Story, StoryComment } from "../../structures/Social.js";
@@ -87,7 +87,7 @@ export interface DeveloperDmImagesInput {
 }
 
 export interface DeveloperReactionSummary {
-  emoji: string;
+  emoji: ReactionCode;
   count: number;
   reacted: boolean;
 }
@@ -231,13 +231,13 @@ export class DeveloperApi {
     return this.rest.get(`/developer/posts/${encodeId(id)}/reactions`);
   }
 
-  react(id: Snowflake | string, emoji: string): Promise<MessageEnvelope> {
+  react(id: Snowflake | string, emoji: ReactionCode): Promise<MessageEnvelope> {
     return this.rest.post(`/developer/posts/${encodeId(id)}/react`, { emoji });
   }
 
   unreact(
     id: Snowflake | string,
-    emoji: string,
+    emoji: ReactionCode,
   ): Promise<MessageEnvelope> {
     return this.rest.delete(
       `/developer/posts/${encodeId(id)}/react/${encodeId(emoji)}`,
@@ -438,7 +438,7 @@ export class DeveloperApi {
 
   reactToBoardThread(
     id: Snowflake | string,
-    emoji: string,
+    emoji: ReactionCode,
   ): Promise<MessageEnvelope> {
     return this.rest.post(
       `/developer/boards/threads/${encodeId(id)}/react`,
@@ -448,7 +448,7 @@ export class DeveloperApi {
 
   reactToBoardReply(
     id: Snowflake | string,
-    emoji: string,
+    emoji: ReactionCode,
   ): Promise<MessageEnvelope> {
     return this.rest.post(
       `/developer/boards/replies/${encodeId(id)}/react`,

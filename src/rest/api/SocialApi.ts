@@ -30,6 +30,10 @@ export interface StoriesResponse {
   pagination?: PageInfo;
 }
 
+export interface StoryListQuery extends Pagination {
+  filter?: string;
+}
+
 export interface StoryCommentsResponse {
   comments: StoryComment[];
   pagination?: PageInfo;
@@ -134,7 +138,7 @@ export class SocialApi {
     );
   }
 
-  stories(query?: Pagination): Promise<StoriesResponse> {
+  stories(query?: StoryListQuery): Promise<StoriesResponse> {
     return this.rest.get("/social/stories", encodeQuery(query));
   }
 

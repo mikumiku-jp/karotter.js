@@ -9,6 +9,7 @@ import type {
   PostDraft,
   PostTranslation,
   ReplyTargets,
+  ReactionCode,
   ScheduledPost,
   ScheduledPostUpdateInput,
   TimelineQuery,
@@ -70,6 +71,7 @@ export interface PublicFeedQuery extends Pagination {
 
 export interface FetchPostQuery {
   includeMutedOrBlocked?: boolean;
+  includeUnavailableReference?: boolean;
 }
 
 export interface ReplyListResponse {
@@ -334,11 +336,11 @@ export class PostsApi {
     });
   }
 
-  react(id: Snowflake | string, emoji: string): Promise<MessageEnvelope> {
+  react(id: Snowflake | string, emoji: ReactionCode): Promise<MessageEnvelope> {
     return this.rest.post(`/posts/${encodeId(id)}/react`, { emoji });
   }
 
-  unreact(id: Snowflake | string, emoji: string): Promise<MessageEnvelope> {
+  unreact(id: Snowflake | string, emoji: ReactionCode): Promise<MessageEnvelope> {
     return this.rest.delete(
       `/posts/${encodeId(id)}/react/${encodeURIComponent(emoji)}`,
     );
@@ -346,7 +348,7 @@ export class PostsApi {
 
   reactionUsers(
     id: Snowflake | string,
-    emoji: string,
+    emoji: ReactionCode,
     query?: Pagination,
   ): Promise<UserListResponse> {
     return this.rest.get(

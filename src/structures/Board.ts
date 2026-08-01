@@ -1,5 +1,6 @@
 import type { IsoDate, Snowflake } from "../util/types.js";
 import type { User } from "./User.js";
+import type { ReactionSummary } from "./Post.js";
 
 export interface Board {
   id: Snowflake;
@@ -26,6 +27,7 @@ export interface BoardThread {
   updatedAt?: IsoDate;
   author?: User;
   followed?: boolean;
+  reactionSummary?: ReactionSummary[];
   [extra: string]: unknown;
 }
 
@@ -37,5 +39,5 @@ export interface BoardReply {
   imageUrls?: string[];
   createdAt: IsoDate;
   author?: User;
-  reactionSummary?: Array<{ emoji: string; count: number; reacted?: boolean }>;
+  reactionSummary?: ReactionSummary[];
 }

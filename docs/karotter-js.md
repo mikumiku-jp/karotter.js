@@ -132,8 +132,8 @@ interface KarotterOptions {
 | `revokeSession(sessionId)` | 指定セッション失効 |
 | `revokeOtherSessions()` | 他セッション失効 |
 | `revokeAllSessions()` | 全セッション失効 |
-| `switchSession(input)` | セッション切替 |
-| `unreadSnapshots()` | セッション別未読数 |
+| `switchSession(input)` | セッション切替。端末情報を省略した場合は認証ストアから補完 |
+| `unreadSnapshots(input?)` | `sessionIds` を指定できるセッション別未読数 |
 | `forgotPassword(email)` | 再設定メール送信 |
 | `resetPassword(token, password)` | パスワード再設定 |
 | `verifyEmail(token)` | メール認証 |
@@ -164,7 +164,9 @@ interface KarotterOptions {
 | Draft | `drafts`, `createDraft`, `updateDraft`, `deleteDraft` |
 | Feedback | `betaSurvey` |
 
-`PostOptions` は公開範囲、返信制限、メディア、投票、予約投稿、AI・広告・年齢フラグを表します。SDK は投稿前に文字数、投票選択肢数、年齢範囲を検証します。
+`PostOptions` は公開範囲、返信制限、メディア、投票、予約投稿、AI・広告・年齢フラグを表します。SDK は空投稿、投票選択肢、必要な Circle ID、予約日時を検証します。文字数上限は契約 plan で変わるため、`getActiveSubscriptionPlan()` と `getSubscriptionPlanCapabilities()` で取得し、最終判定はサーバー response を扱います。
+
+`get()` と `fetch()` の `FetchOptions` は `includeMutedOrBlocked` と `includeUnavailableReference` を受け取ります。
 
 ## TimelineActions
 
@@ -192,6 +194,7 @@ client.users.replies(target, query?);
 client.users.followers(target, query?);
 client.users.following(target, query?);
 client.users.mutualFollowers(target, query?);
+client.users.followers(target, { q: "name", limit: 20 });
 client.users.recommended(query?);
 client.users.levelRanking(query?);
 client.users.usernameQuota();
@@ -200,11 +203,13 @@ client.users.updateStatus(input);
 client.users.updateSettings(input);
 client.users.updatePassword(input);
 client.users.updateUsername(username);
-client.users.setPinnedPost(target);
+client.users.setPinnedPost(target, pinned);
 client.users.deleteAccount(password);
 client.users.uploadAvatar(file);
 client.users.uploadHeader(file);
 ```
+
+`setPinnedPost(target, true)` は固定、`setPinnedPost(target, false)` は対象だけを固定解除します。複数固定は `User.pinnedPostIds` と `UserDetail.pinnedPosts`、上限は `User.pinnedPostLimit` で扱います。
 
 Follow:
 
@@ -229,7 +234,7 @@ client.follows.respondToRequest(target, action);
 ```ts
 client.dm.groups(query?);
 client.dm.unreadCount();
-client.dm.createGroup(targets);
+client.dm.createGroup(targets, { name?, isGroup? });
 client.dm.with(target);
 client.dm.group(group);
 client.dm.activeCalls();
@@ -245,7 +250,7 @@ conversation.send(content, options?);
 conversation.editMessage(message, content);
 conversation.deleteMessage(message);
 conversation.react(message, emoji);
-conversation.unreact(message, emoji?);
+conversation.removeReaction(message, emoji?);
 conversation.read(message?);
 conversation.typing();
 conversation.stopTyping();
@@ -256,6 +261,22 @@ conversation.settings();
 conversation.updateSettings(input);
 conversation.translateMessage(message, targetLanguage);
 ```
+
+## NotificationsActions
+
+```ts
+client.notifications.list({ page?, limit?, types? });
+client.notifications.unreadCount();
+client.notifications.groupedPosts(query?);
+client.notifications.readAll({ types? });
+client.notifications.read(id);
+client.notifications.delete(id);
+client.notifications.deleteAll();
+client.notifications.registerPush({ token, platform?, deviceId? });
+client.notifications.unregisterPush(token, deviceId?);
+```
+
+`list()` と `readAll()` の `types` は `NotificationType[]` を受け取り、comma 区切りの query に変換します。`readAll()` は JSON body を送信しません。Push 登録の `platform` と `deviceId` は省略時に認証ストアから補完します。
 
 ## SearchActions と SocialActions
 
@@ -273,6 +294,8 @@ client.search.latest(query?);
 client.search.media(query?);
 client.search.topics(query?);
 ```
+
+`SearchOptions.compact` はユーザー検索の軽量 response 指定に使います。
 
 Social:
 
@@ -294,6 +317,8 @@ client.social.questionInbox();
 client.social.answerQuestion(id, content);
 client.social.linkPreview(url);
 ```
+
+`stories()` は `StoryListQuery.filter` を受け取ります。
 
 ## CommunitiesActions
 
@@ -339,6 +364,8 @@ client.social.linkPreview(url);
 
 Message と Forum の作成 payload は `JsonObject | FormData` です。
 
+投稿、DM、Board、Guild message の reaction は `ReactionCode` を受け取ります。Pro 専用 code は `pro:*` で、`isProReactionCode()` から判定できます。
+
 ## GuildBotsActions
 
 ```ts
@@ -365,14 +392,32 @@ client.bot.setCommandPermissions(commandId, input);
 ```ts
 client.subscriptions.plans();
 client.subscriptions.me();
-client.subscriptions.checkout(input);
-client.subscriptions.portal(input?);
-client.subscriptions.updatePreferences(input);
+client.subscriptions.checkout({ productCode: "PRO" });
+client.subscriptions.portal();
+client.subscriptions.updatePreferences({
+  premiumBadgeColor: "BLACK",
+  showProfileDecoration: true,
+  profileAccentColor: "#ff7a00",
+});
 client.subscriptions.receivedGifts();
 client.subscriptions.gift(id);
-client.subscriptions.giftCheckout(input);
-client.subscriptions.respondToGift(id, input);
+client.subscriptions.giftCheckout({
+  productCode: "PLUS",
+  recipientUsername: "username",
+});
+client.subscriptions.respondToGift(id, { response: "ACCEPT" });
 ```
+
+購読権利の fallback は次の helper で取得します。`getActiveSubscriptionPlan()` は `ACTIVE`・`TRIALING` と有効期限を評価し、失効済みを `FREE` として扱います。
+
+```ts
+const activePlan = getActiveSubscriptionPlan(client.user);
+const capabilities = getSubscriptionPlanCapabilities(activePlan);
+const uploadLimitFor = (standardLimitBytes: number) =>
+  getSubscriptionUploadLimit(activePlan, standardLimitBytes);
+```
+
+現行値は Free が200文字・固定1件、Plus が1,000文字・固定3件・返信 boost、Pro が7,000文字・固定5件・返信 boost強化・200 MiB upload・専用 reaction・Profile/Card 装飾です。Pro upload 上限は投稿・返信、Story、Board、DM 添付で確認済みです。
 
 ## OAuthActions
 
@@ -482,9 +527,9 @@ Twitter v2 互換 API は `client.developer.v2` の `me`, `fetchUser`, `userByUs
 - Community: `Community`, `CommunityMember`, `CommunityTimeline`
 - Guild: `Guild`, `GuildChannel`, `GuildMember`, `GuildRole`, `GuildMessage`, `GuildForumPost`, `GuildApplicationCommand`
 - Bot・OAuth: `BotCommandInput`, `GuildCommandPermission`, `OAuthAuthorizeInput`, `OAuthTokenInput`, `OAuthTokenResult`, `OAuthUserInfo`
-- Subscription: `SubscriptionPlan`, `SubscriptionSummary`, `SubscriptionGift`
+- Subscription: `SubscriptionOverview`, `SubscriptionEntitlements`, `SubscriptionPlan`, `SubscriptionPreferences`, `SubscriptionGift`
 - Developer: `DeveloperPostCreateInput`, `DeveloperPostUpdateInput`, `DeveloperDmImagesInput`, `DeveloperUsage`
 - Realtime: `SocketEvents`, `DmEvents`, `GuildEvents`, `ChannelEvents`, `RadioEvents`, `DrawEvents`, `VoiceEvents`
 - 共通: `Snowflake`, `Pagination`, `JsonObject`, `MessageEnvelope`
 
-HTTP endpoint 単位の仕様は [API リファレンス](./api-reference.md)、認証・Cookie・Retry・Socket.IO の詳細は [API 仕様](./api-spec.md) を参照してください。
+HTTP endpoint、認証、Cookie、Retry、Socket.IO の詳細は [Karotter API リファレンス](./karotter-api/README.md) を参照してください。

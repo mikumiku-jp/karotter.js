@@ -5,6 +5,7 @@ import type {
   GuildMessage,
   GuildStage,
 } from "../../structures/Guild.js";
+import type { ReactionCode } from "../../structures/Post.js";
 import type {
   JsonObject,
   MessageEnvelope,
@@ -156,10 +157,10 @@ export class ChannelsApi {
 
   reactToMessage(
     messageId: Snowflake | string,
-    reaction: string,
+    emoji: ReactionCode,
   ): Promise<MessageEnvelope> {
     return this.rest.post(`/channels/messages/${encodeId(messageId)}/reactions`, {
-      reaction,
+      emoji,
     });
   }
 }

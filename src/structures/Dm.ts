@@ -1,7 +1,12 @@
 import type { IsoDate, Snowflake } from "../util/types.js";
 import type { MediaInput } from "../util/form.js";
-import type { Poll } from "./Post.js";
+import type { Poll, ReactionEntry } from "./Post.js";
 import type { User } from "./User.js";
+
+export interface CreateDmGroupOptions {
+  name?: string | null;
+  isGroup?: boolean;
+}
 
 export interface DmGroup {
   id: Snowflake;
@@ -40,7 +45,7 @@ export interface DmMessage {
   createdAt: IsoDate;
   editedAt?: IsoDate | null;
   sender?: User;
-  reactions?: Array<{ emoji: string; userId: Snowflake }>;
+  reactions?: ReactionEntry[];
   poll?: Poll | null;
   [extra: string]: unknown;
 }

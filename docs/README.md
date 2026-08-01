@@ -99,6 +99,13 @@ const client = await karotter.register({
 ```ts
 const sessions = await client.auth.sessions();
 await client.auth.revokeSession(sessions.sessions[0]?.id ?? "");
+const snapshots = await client.auth.unreadSnapshots({
+  sessionIds: sessions.sessions.map((session) => session.id),
+});
+const firstSession = sessions.sessions[0];
+if (firstSession) {
+  await client.auth.switchSession({ sessionId: firstSession.id });
+}
 
 const quiz = await client.auth.legalQuiz();
 await client.auth.gradeLegalQuiz({
@@ -189,7 +196,15 @@ const user = await client.users.get("username");
 const followers = await client.users.followers(user);
 const ranking = await client.users.levelRanking({ limit: 20 });
 
+await client.users.updateSettings({ isPrivate: true });
 await client.follows.follow(user);
+
+const pending = await client.follows.pendingRequests();
+const request = pending.requests[0];
+if (request) {
+  await client.follows.respondToRequest(request.id, "accept");
+}
+
 await client.follows.mute(user);
 await client.follows.hideRekarots(user);
 ```
@@ -227,6 +242,8 @@ await client.communities.reorderHomeTimelines([community.id]);
 ```
 
 Community 検索は `client.search.communities({ q: "TypeScript" })` です。
+
+ユーザー検索では `compact`、フォロワー・フォロー中・共通フォロワー一覧では `q`、ストーリー一覧では `filter` を指定できます。投稿取得は `includeUnavailableReference` に対応します。
 
 ## Guild、Channel、Guild Bot
 
@@ -315,10 +332,20 @@ await botClient.bot.upsertCommand({
 const conversation = await client.dm.with("username");
 await conversation.send("hello");
 
+const group = await client.dm.createGroup(["alice", "bob"], {
+  name: "project",
+  isGroup: true,
+});
 const unread = await client.dm.unreadCount();
-const notifications = await client.notifications.list({ limit: 30 });
+const notifications = await client.notifications.list({
+  page: 1,
+  limit: 30,
+  types: ["MENTION", "DM"],
+});
+await client.notifications.readAll({ types: ["MENTION", "DM"] });
+await client.notifications.registerPush({ token: "push-token" });
 
-console.log(unread, notifications.notifications);
+console.log(group.id, unread, notifications.notifications);
 ```
 
 ```ts
@@ -330,14 +357,17 @@ await conversation.leaveCall();
 ## Subscription と OAuth Client
 
 ```ts
-const plans = await client.subscriptions.plans();
+const catalog = await client.subscriptions.plans();
 const current = await client.subscriptions.me();
+const pro = catalog.plans.find((plan) => plan.code === "PRO");
+
+if (!pro) throw new Error("Karotter Pro is unavailable");
 
 const checkout = await client.subscriptions.checkout({
-  planId: plans.plans[0]?.id ?? "",
+  productCode: pro.code,
 });
 
-console.log(current.summary, checkout.url);
+console.log(current.summary, current.entitlements, checkout.url);
 ```
 
 Gift と Portal も同じ API グループにあります。
@@ -345,7 +375,7 @@ Gift と Portal も同じ API グループにあります。
 ```ts
 const gifts = await client.subscriptions.receivedGifts();
 await client.subscriptions.respondToGift(gifts.gifts[0]?.id ?? "", {
-  action: "ACCEPT",
+  response: "ACCEPT",
 });
 
 const portal = await client.subscriptions.portal();
@@ -497,5 +527,4 @@ try {
 ## 関連文書
 
 - [SDK リファレンス](./karotter-js.md)
-- [HTTP API リファレンス](./api-reference.md)
-- [HTTP・認証・リアルタイム仕様](./api-spec.md)
+- [Karotter API リファレンス](./karotter-api/README.md)

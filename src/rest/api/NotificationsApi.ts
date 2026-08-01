@@ -1,15 +1,20 @@
 import type { RestClient } from "../RestClient.js";
-import type { Notification } from "../../structures/Notification.js";
 import type {
+  Notification,
+  NotificationType,
+} from "../../structures/Notification.js";
+import type {
+  ClientType,
   CursorPagination,
   MessageEnvelope,
+  OffsetPagination,
   PageInfo,
 } from "../../util/types.js";
 import { encodeId, encodeQuery } from "../utils.js";
 import type { PostListResponse } from "./PostsApi.js";
 import {
-  iterateCursorPages,
-  type CursorPaginationOptions,
+  iterateOffsetPages,
+  type OffsetPaginationOptions,
 } from "../../util/pagination.js";
 import { assertArrayResponse } from "../../util/validation.js";
 
@@ -18,30 +23,46 @@ export interface NotificationListResponse {
   pagination?: PageInfo;
 }
 
+export interface NotificationListQuery extends OffsetPagination {
+  types?: NotificationType[] | string;
+}
+
 export interface NotificationGroupedPostsQuery extends CursorPagination {
   notificationIds?: string[];
 }
 
 export interface NotificationReadAllInput {
-  types?: string[];
+  types?: NotificationType[];
+}
+
+export interface PushRegistrationInput {
+  token: string;
+  platform?: ClientType;
+  deviceId?: string;
 }
 
 export class NotificationsApi {
   constructor(private readonly rest: RestClient) {}
 
-  list(query?: CursorPagination): Promise<NotificationListResponse> {
+  list(query: NotificationListQuery = {}): Promise<NotificationListResponse> {
     return this.rest
-      .get<NotificationListResponse>("/notifications", encodeQuery(query))
+      .get<NotificationListResponse>(
+        "/notifications",
+        encodeQuery({
+          ...query,
+          types: joinNotificationTypes(query.types),
+        }),
+      )
       .then((response) =>
         validateListResponse(response, "notifications", "notifications.list"),
       );
   }
 
   iterList(
-    query: CursorPagination = {},
-    options: CursorPaginationOptions = {},
+    query: NotificationListQuery = {},
+    options: OffsetPaginationOptions = {},
   ): AsyncGenerator<Notification> {
-    return iterateCursorPages(
+    return iterateOffsetPages(
       (pageQuery) => this.list(pageQuery),
       (response) => response.notifications,
       query,
@@ -62,7 +83,11 @@ export class NotificationsApi {
   }
 
   markAllRead(input: NotificationReadAllInput = {}): Promise<MessageEnvelope> {
-    return this.rest.patch("/notifications/read-all", input);
+    return this.rest.patch(
+      "/notifications/read-all",
+      undefined,
+      encodeQuery({ types: joinNotificationTypes(input.types) }),
+    );
   }
 
   markRead(id: string): Promise<MessageEnvelope> {
@@ -77,12 +102,10 @@ export class NotificationsApi {
     return this.rest.delete("/notifications/all");
   }
 
-  registerPush(input: {
-    token: string;
-    deviceId?: string;
-  }): Promise<MessageEnvelope> {
+  registerPush(input: PushRegistrationInput): Promise<MessageEnvelope> {
     return this.rest.post("/notifications/push/register", {
       token: input.token,
+      platform: input.platform ?? this.rest.auth.clientType,
       deviceId: input.deviceId ?? this.rest.auth.deviceId,
     });
   }
@@ -93,6 +116,12 @@ export class NotificationsApi {
       deviceId: deviceId ?? this.rest.auth.deviceId,
     });
   }
+}
+
+function joinNotificationTypes(
+  types: NotificationType[] | string | undefined,
+): string | undefined {
+  return Array.isArray(types) ? types.join(",") : types;
 }
 
 function validateListResponse<T>(

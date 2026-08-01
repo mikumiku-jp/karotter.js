@@ -1,5 +1,6 @@
 import type { IsoDate, PageInfo, Snowflake } from "../util/types.js";
 import type { User } from "./User.js";
+import type { ReactionEntry } from "./Post.js";
 
 export interface Guild {
   id: Snowflake;
@@ -53,15 +54,21 @@ export interface GuildBan {
 export interface GuildMessage {
   id: Snowflake;
   channelId?: Snowflake;
+  authorId?: Snowflake;
+  author?: User;
   content?: string;
+  reactions?: ReactionEntry[];
   [extra: string]: unknown;
 }
 
 export interface GuildForumPost {
   id: Snowflake;
   channelId?: Snowflake;
+  authorId?: Snowflake;
+  author?: User;
   title?: string;
   content?: string;
+  reactions?: ReactionEntry[];
   [extra: string]: unknown;
 }
 

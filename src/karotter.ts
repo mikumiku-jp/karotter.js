@@ -18,6 +18,24 @@ import { MiscApi } from "./rest/api/MiscApi.js";
 import { NewsApi } from "./rest/api/NewsApi.js";
 import { OAuthApi } from "./rest/api/OAuthApi.js";
 import { SubscriptionsApi } from "./rest/api/SubscriptionsApi.js";
+import type {
+  NotificationListQuery,
+  NotificationReadAllInput,
+  PushRegistrationInput,
+} from "./rest/api/NotificationsApi.js";
+import type { StoryListQuery } from "./rest/api/SocialApi.js";
+import type {
+  FollowRequest,
+  FollowRequestAction,
+} from "./rest/api/FollowApi.js";
+import type {
+  ProfileUpdate,
+  PinnedPostUpdateResponse,
+  StatusUpdate,
+  UserSettings,
+  UsernameQuota,
+  UserListQuery,
+} from "./rest/api/UsersApi.js";
 import { Gateway, type GatewayOptions } from "./realtime/Gateway.js";
 import type {
   ClientEventArgs,
@@ -32,6 +50,11 @@ import type {
   LoginInput,
   LoginResult,
   RegisterInput,
+  SessionInfo,
+  SessionUnreadSnapshot,
+  SessionUnreadSnapshotInput,
+  SwitchSessionInput,
+  SwitchSessionResult,
   TwoFactorDisableInput,
   TwoFactorEnableResult,
   TwoFactorLoginInput,
@@ -44,11 +67,18 @@ import type {
   Post,
   PostAnalytics,
   PostTranslation,
+  ReactionCode,
   ScheduledPost,
   ScheduledPostUpdateInput,
 } from "./structures/Post.js";
 import type { CurrentUser, User, UserDetail } from "./structures/User.js";
 import type { CommunityListResponse } from "./structures/Community.js";
+import type { CreateDmGroupOptions } from "./structures/Dm.js";
+import type {
+  Notification,
+  NotificationType,
+} from "./structures/Notification.js";
+import type { Story } from "./structures/Social.js";
 import type {
   CursorPagination,
   JsonObject,
@@ -59,6 +89,7 @@ import type {
   ReplyRestriction,
   Snowflake,
   Visibility,
+  UserOnlineStatus,
 } from "./util/types.js";
 import {
   appendField,
@@ -143,15 +174,16 @@ export interface BookmarkListOptions extends Pagination {
 
 export interface FetchOptions {
   includeMutedOrBlocked?: boolean;
+  includeUnavailableReference?: boolean;
 }
 
 export interface NotificationGroupedPostsOptions extends CursorPagination {
   notificationIds?: string[];
 }
 
-export interface NotificationReadAllOptions {
-  types?: string[];
-}
+export type NotificationListOptions = NotificationListQuery;
+
+export type NotificationReadAllOptions = NotificationReadAllInput;
 
 export interface CircleCreateOptions {
   name: string;
@@ -170,8 +202,8 @@ export interface QuestionSendOptions {
   content: string;
 }
 
-export interface SwitchSessionOptions {
-  sessionId?: string;
+export interface SwitchSessionOptions
+  extends Omit<SwitchSessionInput, "userId"> {
   userId?: ResourceTarget;
 }
 
@@ -220,6 +252,7 @@ export interface SearchOptions {
   page?: number;
   limit?: number;
   cursor?: Snowflake | string;
+  compact?: boolean | "1";
 }
 
 export interface PostSearchOptions extends SearchOptions {
@@ -534,8 +567,8 @@ export class AuthActions {
     return this.api.refreshTokens();
   }
 
-  sessions(): Promise<{ sessions: unknown[] }> {
-    return this.rest.get("/auth/sessions");
+  sessions(): Promise<{ sessions: SessionInfo[] }> {
+    return this.api.sessions();
   }
 
   revokeSession(sessionId: string): Promise<MessageEnvelope> {
@@ -550,26 +583,21 @@ export class AuthActions {
     return this.rest.delete("/auth/sessions/all");
   }
 
-  async switchSession(input: SwitchSessionOptions): Promise<{
-    accessToken: string;
-    refreshToken?: string;
-    sessionId: string;
-    user: CurrentUser;
-  }> {
-    const userId =
-      input.userId === undefined
-        ? undefined
-        : Number(await resolveUserId(this.rest, input.userId));
-    return this.rest.post("/auth/switch-session", {
-      ...input,
-      userId,
-    });
+  async switchSession(
+    input: SwitchSessionOptions,
+  ): Promise<SwitchSessionResult> {
+    const { userId: target, ...sessionInput } = input;
+    if (target === undefined) {
+      return this.api.switchSession(sessionInput);
+    }
+    const userId = Number(await resolveUserId(this.rest, target));
+    return this.api.switchSession({ ...sessionInput, userId });
   }
 
-  unreadSnapshots(): Promise<{ snapshots: unknown[] }> {
-    return this.rest.post("/auth/session-unread-snapshots", {
-      deviceId: this.rest.auth.deviceId,
-    });
+  unreadSnapshots(
+    input: SessionUnreadSnapshotInput = {},
+  ): Promise<{ snapshots: SessionUnreadSnapshot[] }> {
+    return this.api.unreadSnapshots(input);
   }
 
   forgotPassword(email: string): Promise<MessageEnvelope> {
@@ -812,11 +840,11 @@ export class PostsActions {
     });
   }
 
-  react(target: ResourceTarget, emoji: string): Promise<MessageEnvelope> {
+  react(target: ResourceTarget, emoji: ReactionCode): Promise<MessageEnvelope> {
     return this.rest.post(`/posts/${encodeId(idOf(target))}/react`, { emoji });
   }
 
-  unreact(target: ResourceTarget, emoji: string): Promise<MessageEnvelope> {
+  unreact(target: ResourceTarget, emoji: ReactionCode): Promise<MessageEnvelope> {
     return this.rest.delete(
       `/posts/${encodeId(idOf(target))}/react/${encodeURIComponent(emoji)}`,
     );
@@ -824,7 +852,7 @@ export class PostsActions {
 
   reactionUsers(
     target: ResourceTarget,
-    emoji: string,
+    emoji: ReactionCode,
     query?: Pagination,
   ): Promise<UserList> {
     return this.rest.get(
@@ -1014,21 +1042,21 @@ export class UsersActions {
     );
   }
 
-  followers(target: ResourceTarget, query?: Pagination): Promise<UserList> {
+  followers(target: ResourceTarget, query?: UserListQuery): Promise<UserList> {
     return this.rest.get(
       `/users/${encodeId(usernameOrId(target))}/followers`,
       encodeQuery(query),
     );
   }
 
-  following(target: ResourceTarget, query?: Pagination): Promise<UserList> {
+  following(target: ResourceTarget, query?: UserListQuery): Promise<UserList> {
     return this.rest.get(
       `/users/${encodeId(usernameOrId(target))}/following`,
       encodeQuery(query),
     );
   }
 
-  mutualFollowers(target: ResourceTarget, query?: Pagination): Promise<UserList> {
+  mutualFollowers(target: ResourceTarget, query?: UserListQuery): Promise<UserList> {
     return this.rest.get(
       `/users/${encodeId(usernameOrId(target))}/mutual-followers`,
       encodeQuery(query),
@@ -1043,19 +1071,23 @@ export class UsersActions {
     return this.rest.get("/users/level-ranking", encodeQuery(query));
   }
 
-  usernameQuota(): Promise<unknown> {
+  usernameQuota(): Promise<UsernameQuota> {
     return this.rest.get("/users/username/quota");
   }
 
-  updateProfile(input: JsonObject): Promise<{ message: string; user: User }> {
+  updateProfile(input: ProfileUpdate): Promise<{ message: string; user: User }> {
     return this.rest.patch("/users/profile", input);
   }
 
-  updateStatus(input: JsonObject): Promise<JsonObject> {
+  updateStatus(input: StatusUpdate): Promise<{
+    message: string;
+    status?: UserOnlineStatus;
+    statusMessage?: string;
+  }> {
     return this.rest.patch("/users/status", input);
   }
 
-  updateSettings(input: JsonObject): Promise<JsonObject> {
+  updateSettings(input: UserSettings): Promise<UserSettings> {
     return this.rest.patch("/users/settings", input);
   }
 
@@ -1070,12 +1102,14 @@ export class UsersActions {
     return this.rest.patch("/users/username", { username });
   }
 
-  async setPinnedPost(target: ResourceTarget | null): Promise<JsonObject> {
-    const postId = target === null ? undefined : idOf(target);
-    return this.rest.patch(
-      "/users/profile/pinned-post",
-      postId === undefined ? {} : { postId },
-    );
+  setPinnedPost(
+    target: ResourceTarget | null,
+    pinned = target !== null,
+  ): Promise<PinnedPostUpdateResponse> {
+    return this.rest.patch("/users/profile/pinned-post", {
+      postId: target === null ? null : idOf(target),
+      pinned,
+    });
   }
 
   deleteAccount(password: string): Promise<MessageEnvelope> {
@@ -1156,13 +1190,13 @@ export class FollowActions {
     );
   }
 
-  pendingRequests(): Promise<{ requests: unknown[] }> {
+  pendingRequests(): Promise<{ requests: FollowRequest[] }> {
     return this.rest.get("/follow/requests/pending");
   }
 
   respondToRequest(
     requestId: Snowflake | string,
-    action: "accept" | "reject",
+    action: FollowRequestAction,
   ): Promise<MessageEnvelope> {
     return this.rest.post(
       `/follow/requests/${encodeId(requestId)}/${action}`,
@@ -1252,18 +1286,15 @@ export class DmActions {
     return this.rest.get("/dm/unread/count");
   }
 
-  async createGroup(targets: ResourceTarget[]): Promise<DmConversation> {
+  async createGroup(
+    targets: ResourceTarget[],
+    options: CreateDmGroupOptions = {},
+  ): Promise<DmConversation> {
     const userIds = await resolveUserIds(this.rest, targets);
     const response = await this.rest.post<{ group: DmGroup }>("/dm/groups", {
       userIds: userIds.map((userId) => Number(userId)),
-    });
-    return new DmConversation(this.rest, response.group);
-  }
-
-  async with(target: ResourceTarget): Promise<DmConversation> {
-    const targetUserId = await resolveUserId(this.rest, target);
-    const response = await this.rest.post<{ group: DmGroup }>("/dm/start", {
-      targetUserId: Number(targetUserId),
+      name: options.name?.trim() || null,
+      isGroup: options.isGroup ?? targets.length > 1,
     });
     return new DmConversation(this.rest, response.group);
   }
@@ -1483,13 +1514,13 @@ export class DmConversation {
     return this.rest.delete(`/dm/messages/${encodeId(idOf(message))}`);
   }
 
-  react(message: ResourceTarget, emoji: string): Promise<MessageEnvelope> {
+  react(message: ResourceTarget, emoji: ReactionCode): Promise<MessageEnvelope> {
     return this.rest.post(`/dm/messages/${encodeId(idOf(message))}/reactions`, {
       emoji,
     });
   }
 
-  removeReaction(message: ResourceTarget, emoji?: string): Promise<MessageEnvelope> {
+  removeReaction(message: ResourceTarget, emoji?: ReactionCode): Promise<MessageEnvelope> {
     if (emoji !== undefined) {
       return this.rest.delete(
         `/dm/messages/${encodeId(idOf(message))}/reactions/${encodeId(emoji)}`,
@@ -1579,8 +1610,16 @@ export class SearchActions {
 export class NotificationsActions {
   constructor(private readonly rest: RestClient) {}
 
-  list(query?: CursorPagination): Promise<{ notifications: unknown[]; pagination?: PageInfo }> {
-    return this.rest.get("/notifications", encodeQuery(query));
+  list(
+    query: NotificationListOptions = {},
+  ): Promise<{ notifications: Notification[]; pagination?: PageInfo }> {
+    return this.rest.get(
+      "/notifications",
+      encodeQuery({
+        ...query,
+        types: joinNotificationTypes(query.types),
+      }),
+    );
   }
 
   unreadCount(): Promise<{ count: number }> {
@@ -1592,7 +1631,11 @@ export class NotificationsActions {
   }
 
   readAll(input: NotificationReadAllOptions = {}): Promise<MessageEnvelope> {
-    return this.rest.patch("/notifications/read-all", input);
+    return this.rest.patch(
+      "/notifications/read-all",
+      undefined,
+      encodeQuery({ types: joinNotificationTypes(input.types) }),
+    );
   }
 
   read(id: Snowflake | string): Promise<MessageEnvelope> {
@@ -1607,9 +1650,10 @@ export class NotificationsActions {
     return this.rest.delete("/notifications/all");
   }
 
-  registerPush(input: { token: string; deviceId?: string }): Promise<MessageEnvelope> {
+  registerPush(input: PushRegistrationInput): Promise<MessageEnvelope> {
     return this.rest.post("/notifications/push/register", {
       token: input.token,
+      platform: input.platform ?? this.rest.auth.clientType,
       deviceId: input.deviceId ?? this.rest.auth.deviceId,
     });
   }
@@ -1620,6 +1664,12 @@ export class NotificationsActions {
       deviceId: deviceId ?? this.rest.auth.deviceId,
     });
   }
+}
+
+function joinNotificationTypes(
+  types: NotificationType[] | string | undefined,
+): string | undefined {
+  return Array.isArray(types) ? types.join(",") : types;
 }
 
 export class SocialActions {
@@ -1713,11 +1763,13 @@ export class SocialActions {
     );
   }
 
-  stories(query?: Pagination): Promise<{ stories: unknown[]; pagination?: PageInfo }> {
+  stories(
+    query?: StoryListQuery,
+  ): Promise<{ stories: Story[]; pagination?: PageInfo }> {
     return this.rest.get("/social/stories", encodeQuery(query));
   }
 
-  createStory(form: FormData): Promise<{ story: unknown }> {
+  createStory(form: FormData): Promise<{ story: Story }> {
     return this.rest.post("/social/stories", form);
   }
 

@@ -1,4 +1,9 @@
-import type { Gender, IsoDate, Snowflake } from "../util/types.js";
+import type {
+  ClientType,
+  Gender,
+  IsoDate,
+  Snowflake,
+} from "../util/types.js";
 import type { CurrentUser } from "./User.js";
 
 export interface LoginInput {
@@ -111,9 +116,17 @@ export interface SessionUnreadSnapshot {
   [extra: string]: unknown;
 }
 
+export interface SessionUnreadSnapshotInput {
+  sessionIds?: string[];
+  deviceId?: string;
+}
+
 export interface SwitchSessionInput {
   sessionId?: string;
   userId?: Snowflake;
+  deviceId?: string;
+  clientType?: ClientType;
+  deviceName?: string;
 }
 
 export interface SwitchSessionResult {

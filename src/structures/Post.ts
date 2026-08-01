@@ -9,6 +9,15 @@ import type { User } from "./User.js";
 
 export type MediaType = "image" | "video" | (string & {});
 
+export type ProReactionCode = `pro:${string}`;
+export type ReactionCode = ProReactionCode | (string & {});
+
+export function isProReactionCode(
+  reaction: string,
+): reaction is ProReactionCode {
+  return reaction.startsWith("pro:") && reaction.length > 4;
+}
+
 export interface PollOption {
   id: Snowflake;
   text: string;
@@ -27,12 +36,12 @@ export interface Poll {
 }
 
 export interface ReactionEntry {
-  emoji: string;
+  emoji: ReactionCode;
   userId: Snowflake;
 }
 
 export interface ReactionSummary {
-  emoji: string;
+  emoji: ReactionCode;
   count: number;
   reacted?: boolean;
 }

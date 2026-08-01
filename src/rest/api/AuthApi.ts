@@ -9,6 +9,7 @@ import type {
   LoginResult,
   RegisterInput,
   SessionUnreadSnapshot,
+  SessionUnreadSnapshotInput,
   SessionInfo,
   SwitchSessionInput,
   SwitchSessionResult,
@@ -270,7 +271,12 @@ export class AuthApi {
   async switchSession(input: SwitchSessionInput): Promise<SwitchSessionResult> {
     const result = await this.rest.post<SwitchSessionResult>(
       "/auth/switch-session",
-      input,
+      {
+        ...input,
+        deviceId: input.deviceId ?? this.rest.auth.deviceId,
+        clientType: input.clientType ?? this.rest.auth.clientType,
+        deviceName: input.deviceName ?? this.rest.auth.deviceName,
+      },
     );
     if (result.accessToken) {
       this.rest.auth.setTokens({
@@ -281,9 +287,12 @@ export class AuthApi {
     return result;
   }
 
-  unreadSnapshots(): Promise<{ snapshots: SessionUnreadSnapshot[] }> {
+  unreadSnapshots(
+    input: SessionUnreadSnapshotInput = {},
+  ): Promise<{ snapshots: SessionUnreadSnapshot[] }> {
     return this.rest.post("/auth/session-unread-snapshots", {
-      deviceId: this.rest.auth.deviceId,
+      sessionIds: input.sessionIds,
+      deviceId: input.deviceId ?? this.rest.auth.deviceId,
     });
   }
 

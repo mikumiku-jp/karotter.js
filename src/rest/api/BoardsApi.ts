@@ -11,6 +11,7 @@ import type {
   Snowflake,
 } from "../../util/types.js";
 import type { User } from "../../structures/User.js";
+import type { ReactionCode } from "../../structures/Post.js";
 import { encodeId, encodeQuery } from "../utils.js";
 
 export interface BoardsResponse {
@@ -31,7 +32,7 @@ export interface BoardThreadResponse {
 }
 
 export interface ReactionUsersResponse {
-  emoji: string;
+  emoji: ReactionCode;
   count: number;
   users: User[];
   pagination?: PageInfo;
@@ -126,7 +127,7 @@ export class BoardsApi {
   reactThread(
     slug: string,
     threadId: Snowflake | string,
-    emoji: string,
+    emoji: ReactionCode,
   ): Promise<MessageEnvelope> {
     return this.rest.post(
       `/boards/${encodeId(slug)}/threads/${encodeId(threadId)}/reactions`,
@@ -137,7 +138,7 @@ export class BoardsApi {
   reactReply(
     slug: string,
     replyId: Snowflake | string,
-    emoji: string,
+    emoji: ReactionCode,
   ): Promise<MessageEnvelope> {
     return this.rest.post(
       `/boards/${encodeId(slug)}/replies/${encodeId(replyId)}/reactions`,
@@ -148,7 +149,7 @@ export class BoardsApi {
   threadReactionUsers(
     slug: string,
     threadId: Snowflake | string,
-    emoji: string,
+    emoji: ReactionCode,
     query?: Pagination,
   ): Promise<ReactionUsersResponse> {
     return this.rest.get(
@@ -160,7 +161,7 @@ export class BoardsApi {
   replyReactionUsers(
     slug: string,
     replyId: Snowflake | string,
-    emoji: string,
+    emoji: ReactionCode,
     query?: Pagination,
   ): Promise<ReactionUsersResponse> {
     return this.rest.get(
