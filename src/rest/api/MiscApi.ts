@@ -1,5 +1,6 @@
 import type { RestClient } from "../RestClient.js";
 import type { MessageEnvelope, Snowflake } from "../../util/types.js";
+import { appendMedia, type MediaInput } from "../../util/form.js";
 
 export interface ContactInput {
   name: string;
@@ -25,4 +26,11 @@ export class MiscApi {
   report(input: ReportInput): Promise<MessageEnvelope> {
     return this.rest.post("/reports", input);
   }
+
+  uploadAudio(file: MediaInput): Promise<{ url?: string; mediaUrl?: string }> {
+    const form = new FormData();
+    appendMedia(form, "audio", file);
+    return this.rest.post("/audio", form);
+  }
+
 }

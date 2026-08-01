@@ -39,6 +39,7 @@ export interface RestClientOptions extends AuthStoreOptions {
 
 export interface RequestOptions {
   headers?: Record<string, string>;
+  authorization?: string | null;
   params?: QueryParams;
   clientType?: ClientType;
   requestedWith?: string | null;
@@ -61,6 +62,7 @@ interface RetryFlags {
   _clientType?: ClientType;
   _requestedWith?: string | null;
   _deviceId?: string;
+  _authorization?: string | null;
 }
 
 type AugmentedConfig = InternalAxiosRequestConfig & RetryFlags;
@@ -185,6 +187,8 @@ export class RestClient {
     const config: AxiosRequestConfig = { method, url };
     if (data !== undefined) config.data = data;
     if (options?.headers) config.headers = options.headers;
+    if (options && "authorization" in options)
+      (config as AugmentedConfig)._authorization = options.authorization;
     if (options?.params) config.params = options.params;
     if (options?.clientType)
       (config as AugmentedConfig)._clientType = options.clientType;
@@ -246,7 +250,13 @@ export class RestClient {
     const csrf = this.auth.collectCsrfTokens();
     if (csrf.length > 0) headers["x-csrf-token"] = csrf.join(",");
     else delete headers["x-csrf-token"];
-    if (this.auth.accessToken) {
+    if (config._authorization !== undefined) {
+      if (config._authorization) {
+        headers["Authorization"] = config._authorization;
+      } else {
+        delete headers["Authorization"];
+      }
+    } else if (this.auth.accessToken) {
       headers["Authorization"] = `Bearer ${this.auth.accessToken}`;
     } else {
       delete headers["Authorization"];

@@ -2,21 +2,28 @@ export {
   AdminActions,
   ApiKeyActions,
   AuthActions,
+  BotActions,
   BoardsActions,
+  ChannelsActions,
+  CommunitiesActions,
   DeveloperActions,
   DrawActions,
+  GuildBotsActions,
+  GuildsActions,
   FollowActions,
   Karotter,
   DmActions,
   DmConversation,
   LegalActions,
   MiscActions,
+  OAuthActions,
   NewsActions,
   NotificationsActions,
   PostsActions,
   RadioActions,
   SearchActions,
   SocialActions,
+  SubscriptionsActions,
   TimelineActions,
   UsersActions,
   karotter,
@@ -27,6 +34,8 @@ export {
   type KarotterOptions,
   type MediaPostOptions,
   type PollPostOptions,
+  type PublicFeedOptions,
+  type RecommendedOptions,
   type PostList,
   type PostOptions,
   type PostSearchOptions,
@@ -45,6 +54,7 @@ export {
 export {
   KarotterError,
   AuthError,
+  TwoFactorRequiredError,
   BadRequestError,
   ForbiddenError,
   NotFoundError,
@@ -88,6 +98,11 @@ export type { MediaInput } from "./util/form.js";
 export type {
   ApiKey,
   CsrfToken,
+  LegalQuiz,
+  LegalQuizGradeInput,
+  LegalQuizGradeResult,
+  LegalQuizOption,
+  LegalQuizQuestion,
   LoginInput,
   LoginResult,
   RegisterInput,
@@ -95,7 +110,13 @@ export type {
   SessionUnreadSnapshot,
   SwitchSessionInput,
   SwitchSessionResult,
+  TwoFactorChallenge,
+  TwoFactorDisableInput,
+  TwoFactorEnableResult,
+  TwoFactorLoginInput,
+  TwoFactorSetup,
 } from "./structures/Auth.js";
+
 export type {
   BookmarkFolder,
   CreatePostInput,
@@ -111,6 +132,8 @@ export type {
   ReactionSummary,
   ScheduledPost,
   TimelineMode,
+  PostTranslation,
+  ScheduledPostUpdateInput,
 } from "./structures/Post.js";
 export type {
   CurrentUser,
@@ -141,7 +164,10 @@ export type {
   NewsArticleInput,
   NewsComment,
 } from "./structures/News.js";
-export type { Notification } from "./structures/Notification.js";
+export type {
+  Notification,
+  NotificationType,
+} from "./structures/Notification.js";
 export type {
   IceServer,
   RadioMessage,
@@ -161,11 +187,73 @@ export type {
   StoryViewer,
   TrendingTopic,
 } from "./structures/Social.js";
+export type {
+  Community,
+  CommunityListResponse,
+  CommunityMember,
+  CommunityPostsResponse,
+  CommunityReport,
+  CommunityTimeline,
+} from "./structures/Community.js";
+export type {
+  Guild,
+  GuildBan,
+  GuildApplicationCommand,
+  GuildBotApplication,
+  GuildChannel,
+  GuildEvent,
+  GuildCommandPermission,
+  GuildCommandPermissionType,
+  GuildForumPost,
+  GuildInvite,
+  GuildListResponse,
+  GuildMember,
+  GuildMessage,
+  GuildRole,
+  GuildStage,
+  GuildVoiceState,
+} from "./structures/Guild.js";
+export type {
+  CheckoutSession,
+  SubscriptionGift,
+  SubscriptionPlan,
+  SubscriptionSummary,
+} from "./structures/Subscription.js";
+export type {
+  OAuthAuthorizeInput,
+  OAuthClient,
+  OAuthTokenInput,
+  OAuthTokenResult,
+  OAuthUserInfo,
+} from "./rest/api/OAuthApi.js";
+export type {
+  BotCommandInput,
+  BotCommandPermissionsInput,
+} from "./rest/api/BotApi.js";
+export type {
+  DeveloperDmImagesInput,
+  DeveloperFollowRequest,
+  DeveloperListQuery,
+  DeveloperNewsCreateInput,
+  DeveloperPostCreateInput,
+  DeveloperPostListQuery,
+  DeveloperPostUpdateInput,
+  DeveloperReactionSummary,
+  DeveloperSearchQuery,
+  DeveloperSearchResult,
+  DeveloperSearchType,
+  DeveloperUsage,
+  TweetV2,
+  TwitterCompatMeta,
+  UserV2,
+} from "./rest/api/DeveloperApi.js";
 
 export {
+  ChannelEvents,
   CallEvents,
   DmEvents,
   DrawEvents,
+  GuildEvents,
   RadioEvents,
   ScreenShareEvents,
   SocketEvents,
@@ -181,6 +269,10 @@ export {
   type DmMessageDeletedPayload,
   type DmMessagePayload,
   type DmRequestUpdatedPayload,
+  type GuildMessageDeletedPayload,
+  type GuildMessagePayload,
+  type GuildResourcePayload,
+  type GuildTypingPayload,
   type DrawChatPayload,
   type DrawCursorPayload,
   type DrawErrorPayload,

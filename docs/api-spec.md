@@ -1,7 +1,7 @@
 # Karotter 内部 API 仕様
 
-karotter.com の SPA バンドル解析 + 実 API プローブ（HTTP プローブ）で再構築した非公式仕様書
-低レベルな実装詳細を扱います。HTTP endpointごとに整理したリファレンスは [`api-reference.md`](./api-reference.md)。
+2026-08-01 時点の Karotter SPA バンドル、公式 API ドキュメント画面、実 API プローブから再構築した非公式仕様書です。現行 SPA 160 chunk から 297 個の直接 Method/Path、公開 API ドキュメントから 17 分類・85 endpoint を確認しています。
+低レベルな実装詳細を扱います。HTTP endpoint ごとの一覧は [`api-reference.md`](./api-reference.md) を参照してください。
 
 ---
 
@@ -41,6 +41,8 @@ CORS 許可オリジン: `karotter.com` `karotter.jp` `karotter.net` `karotter.k
 | `x-device-id` | UUID v4 | セッション識別 |
 | `x-csrf-token` | `karotter_csrf` Cookie 値 + メモリ上のトークン（カンマ連結） | 書き込み系（POST/PUT/PATCH/DELETE） |
 | `Authorization` | `Bearer {accessToken}` | 認証時 |
+| `Authorization` | `Bot {botToken}` | Bot Token API |
+| `x-api-key` | `{apiKey}` | Developer API。Bearer API Key も利用可能 |
 
 ブラウザの `User-Agent` は実行環境が自動付与します。Node.js で明示したい場合は `userAgent`、言語を指定したい場合は `acceptLanguage` を `Client` に渡します。
 
@@ -87,6 +89,17 @@ POST /auth/login
 ```
 
 `Set-Cookie`: `karotter_at` (HttpOnly, Secure, SameSite=Strict, 1h) / `karotter_rt` (HttpOnly, 30d) / `karotter_csrf` (Secure, 30d)
+
+2FA が必要なアカウントでは通常 Token の代わりに challenge が返ります。
+
+```json
+{
+  "twoFactorRequired": true,
+  "twoFactorToken": "temporary-token"
+}
+```
+
+`POST /auth/login/2fa` に `twoFactorToken` と TOTP または Backup Code を渡すとログインを完了できます。設定は `GET /auth/2fa/setup`、`POST /auth/2fa/enable`、解除は `POST /auth/2fa/disable` です。
 
 ### 登録
 
@@ -139,7 +152,46 @@ karotter.js では `email` / `username` / `password` だけ必須。`gender` は
 
 開始 URL を 302 で各 OAuth プロバイダへ。コールバック処理はサーバ側 `/auth/oauth/{provider}/callback`。
 
+### OAuth 2 認可コードフロー
+
+外部アプリ向け OAuth 2 は `/oauth` 配下です。Google・Discord のアカウント接続用 `/auth/oauth/*` とは別系統です。
+
+1. `GET /oauth/authorize` へ `response_type=code`, `client_id`, `redirect_uri`, `scope`, `state` を渡します。
+2. PKCE 使用時は `code_challenge` と `code_challenge_method=S256` を追加します。
+3. Callback の `code` を `POST /oauth/token` で交換します。
+4. `offline_access` scope では `refresh_token` を取得し、同じ Token endpoint の `grant_type=refresh_token` で更新します。
+5. OAuth Access Token を `GET /oauth/userinfo` の Bearer Token に使います。
+
+SDK の `OAuthApi.exchangeToken()` と `userInfo()` はセッション用 Access Token を上書きせず、明示した認証値だけを送ります。
+
+### API Key と Bot Token
+
+Developer API は `/developer` prefix、Bot Token API も同じ prefix を使います。認証 scheme で用途を分けます。
+
+| 用途 | 認証 | 自動 Session refresh |
+|---|---|---|
+| Developer API | `x-api-key` または `Bearer {apiKey}` | API Key を `accessToken` に設定した場合のみ通常 Bearer として送信 |
+| Bot Token API | `Bot {botToken}` | 無効 |
+| OAuth UserInfo | `Bearer {oauthAccessToken}` | 無効 |
+
 ---
+
+## 現行機能ファミリー
+
+| 機能 | 主な prefix | SDK |
+|---|---|---|
+| 公開フィード | `/v2/feed` | `timeline.public`, `posts.reportPublicFeedViews` |
+| Community | `/communities` | `communities` |
+| Guild・Channel | `/guilds`, `/channels` | `guilds`, `channels` |
+| Bot Application | `/guild-bots` | `guildBots` |
+| Bot Token API | `/developer/guilds`, `/developer/channels`, `/developer/applications` | `bot` |
+| Subscription・Gift | `/subscriptions` | `subscriptions` |
+| OAuth Client・OAuth 2 | `/oauth` | `oauth` |
+| 公開 Developer API | `/developer` | `developer` |
+
+Community と Guild は別モデルです。Community は投稿・参加・ルール・ホーム表示を中心にし、Guild は Channel、Role、Member、Invite、Event、Voice、Forum、Bot を持ちます。
+
+`/v2/feed/public` は `kind`, `mode`, `page`, `limit`, `cursor` を受けます。表示記録は `/v2/feed/views`、従来投稿の表示記録は `/posts/batch-views` です。
 
 ## 4. メディア
 
@@ -314,6 +366,12 @@ radio:message  radio:reaction
 draw:room-state  draw:layer-sync  draw:stroke  draw:cursor  draw:chat
 draw:user-left  draw:error
 typing:user  typing:stop
+guild:message-create  guild:message-update  guild:message-delete
+guild:forum-post-create  guild:forum-post-update  guild:forum-post-delete
+guild:typing:user  guild:member-joined  guild:member-removed
+guild:invites-updated  guild:event-created  guild:event-updated  guild:event-deleted
+guild:voice-state-updated
+channel:created  channel:updated  channel:deleted
 ```
 
 ### 送信イベント (C → S)
@@ -326,6 +384,7 @@ radio:signal  radio:renegotiate-request  radio:participant-state
 radio:message  radio:reaction
 draw:join  draw:leave  draw:layer-sync  draw:stroke  draw:cursor  draw:chat
 screen-share:view
+guild:join  guild:leave  channel:join  channel:leave  guild:typing:start
 ```
 
 ### 主要リアルタイム payload
@@ -340,16 +399,20 @@ screen-share:view
 | `draw:layer-sync` | `roomId`, `layers`, `fullSync?`, `revision?`, `clientId?`, `broadcast?` |
 | `draw:stroke` | `roomId`, `layerId?`, `userId?`, `username?`, `clientId?`, `points?`, `color?`, `secondaryColor?`, `size?`, `opacity?`, `drawing?` |
 | `draw:cursor` | `roomId`, `userId?`, `username?`, `clientId?`, `x`, `y`, `drawing?` |
+| `guild:message-create` / `guild:message-update` | `channelId`, `message` |
+| `guild:message-delete` | `channelId`, `messageId` |
+| `guild:typing:user` | `channelId`, `username?`, `userId?`, `guildId?` |
 
 ---
 
 ## 10. 検証手順（再現可能）
 
-1. `https://karotter.com/` の HTML から `/assets/index-*.js` 等のチャンクファイル名を抽出
-2. すべての `.js` チャンクを `curl` で取得
-3. `js-beautify` で整形
-4. `analysis/extract_final.mjs` で axios 呼び出しと `endpoint:` プロパティを抽出（191 件以上）
-5. `analysis/probe.mjs` で実際に HTTP プローブし 404 / 401 を仕分け（実在判定）
+1. `https://karotter.com/` の HTML から現行 entry chunk を取得します。
+2. 静的 import と動的 chunk 参照を再帰走査します。2026-08-01 の取得結果は 160 JavaScript chunk です。
+3. `.get`, `.post`, `.put`, `.patch`, `.delete` 呼び出しを Method/Path に正規化します。現行結果は 297 組です。
+4. `api-docs-BRKNRS3h.js` 内の endpoint 定義配列を構造化し、17 分類・85 endpoint と照合します。
+5. Socket.IO の `.on`, `.once`, `.emit` を抽出し、DOM・stream・LiveKit 内部イベントを除外します。
+6. SDK の path、method、型付き realtime event、ドキュメントを同じ一覧と照合します。
 
 
 ---

@@ -58,6 +58,13 @@ export class SocialApi {
     return this.rest.delete(`/social/circles/${encodeId(id)}`);
   }
 
+  updateCircle(
+    id: Snowflake | string,
+    input: { name?: string },
+  ): Promise<{ circle: Circle }> {
+    return this.rest.patch(`/social/circles/${encodeId(id)}`, input);
+  }
+
   addCircleMember(
     circleId: Snowflake | string,
     userId: Snowflake,
@@ -90,6 +97,13 @@ export class SocialApi {
 
   deleteList(id: Snowflake | string): Promise<MessageEnvelope> {
     return this.rest.delete(`/social/lists/${encodeId(id)}`);
+  }
+
+  updateList(
+    id: Snowflake | string,
+    input: { name?: string; description?: string; isPublic?: boolean },
+  ): Promise<{ list: SocialList }> {
+    return this.rest.patch(`/social/lists/${encodeId(id)}`, input);
   }
 
   listPosts(

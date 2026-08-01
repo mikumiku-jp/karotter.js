@@ -1,290 +1,501 @@
-# karotter.js ガイド
+# karotter.js 利用ガイド
 
-karotter.js の公開APIは `karotter` から始めます。SDKの詳しい説明書は [karotter-js.md](./karotter-js.md)、HTTP endpointの一覧は [API Reference](./api-reference.md) にあります。
+このガイドは `@mikumiku-jp/karotter.js` の高レベル API を、認証から最新機能まで順に説明します。2026-08-01 時点の `karotter.com` 配信 SPA と SDK 実装を基準にしています。
 
-## セッション
+## インストール
+
+```bash
+npm install @mikumiku-jp/karotter.js
+```
+
+Node.js 18 以降が必要です。ESM と CommonJS の両方から利用できます。
 
 ```ts
 import { karotter } from "@mikumiku-jp/karotter.js";
 
-const kt = await karotter.login({
-  id: "username-or-email",
-  password: "password",
+const client = karotter.create();
+```
+
+## 認証
+
+### ログイン
+
+```ts
+await client.login({
+  id: process.env.KAROTTER_IDENTIFIER ?? "",
+  password: process.env.KAROTTER_PASSWORD ?? "",
+});
+
+console.log(client.user, client.isLoggedIn);
+```
+
+ログイン済みクライアントを直接得る場合はファクトリを使えます。
+
+```ts
+const client = await karotter.login({
+  id: process.env.KAROTTER_IDENTIFIER ?? "",
+  password: process.env.KAROTTER_PASSWORD ?? "",
 });
 ```
 
-tokenから始める場合:
+### 2段階認証
+
+`/auth/login` が `twoFactorRequired: true` を返すと、SDK は `TwoFactorRequiredError` を送出します。`twoFactorToken` を使って同じクライアント上で認証を完了してください。
 
 ```ts
-const kt = await karotter.fromToken({
-  accessToken,
-  refreshToken,
+import { TwoFactorRequiredError, karotter } from "@mikumiku-jp/karotter.js";
+
+const client = karotter.create();
+
+try {
+  await client.login({ id: "username", password: "password" });
+} catch (error) {
+  if (!(error instanceof TwoFactorRequiredError)) throw error;
+
+  await client.loginWithTwoFactor({
+    twoFactorToken: error.twoFactorToken,
+    code: "123456",
+  });
+}
+```
+
+2FA の有効化時は setup 情報を認証アプリへ登録し、コードを検証します。
+
+```ts
+const setup = await client.auth.setupTwoFactor();
+const enabled = await client.auth.enableTwoFactor("123456");
+
+console.log(setup.secret, setup.otpauthUrl);
+console.log(enabled.backupCodes);
+
+await client.auth.disableTwoFactor({ code: "123456" });
+```
+
+### Token から開始
+
+```ts
+const client = await karotter.fromToken({
+  accessToken: process.env.KAROTTER_ACCESS_TOKEN ?? "",
+  refreshToken: process.env.KAROTTER_REFRESH_TOKEN,
 });
 ```
 
-ログインせずに公開GETだけ使う場合:
+`useToken()` と `fromToken()` は `/auth/me` を呼び、現在ユーザーを確定します。
+
+### 登録
 
 ```ts
-const kt = karotter.create();
-```
-
-終了:
-
-```ts
-await kt.destroy();
-```
-
-## 登録
-
-```ts
-const kt = await karotter.register({
-  email: "example@example.com",
+const client = await karotter.register({
+  email: "user@example.com",
   username: "example_user",
-  password: "password",
+  password: "strong-password",
 });
 ```
 
-`turnstileToken` を渡した場合はその値を使います。渡さない場合、標準のHTTPクライアントではAndroid登録処理に寄せたtransportを使います。
-`gender` は省略時に `"OTHER"`、`birthday` は `"2000-01-01"`、`acceptTerms` / `acceptPrivacy` は `true` になります。
+`turnstileToken` がない場合は Android 登録通信を利用します。独自 `axiosInstance` を渡した場合は Android transport を利用できません。
+
+### セッション、規約クイズ、OAuth 接続
+
+```ts
+const sessions = await client.auth.sessions();
+await client.auth.revokeSession(sessions.sessions[0]?.id ?? "");
+
+const quiz = await client.auth.legalQuiz();
+await client.auth.gradeLegalQuiz({
+  legalQuizToken: quiz.token,
+  legalQuizAnswers: {},
+});
+
+await client.auth.disconnectOAuth("discord");
+```
+
+OAuth Client の作成・Secret 再生成は `client.oauth`、Google・Discord のログイン開始 URL は `client.auth.oauthUrl()` を使います。
 
 ## 投稿
 
+### 作成
+
 ```ts
-const post = await kt.post("hello", {
-  visibility: "followers",
+const post = await client.post("hello", {
+  visibility: "public",
+  replyRestriction: "everyone",
 });
 
-await kt.reply(post, "reply");
-await kt.quote(post, "quote");
-await kt.like(post);
-await kt.delete(post);
+await client.reply(post, "reply");
+await client.quote(post, "quote");
 ```
 
-`Post` オブジェクト、ID文字列、数値IDをそのまま渡せます。
-
 ```ts
-await kt.reply(post.id, "reply");
-await kt.quote("631800", "quote");
-```
+await client.media("image", [{ file, alt: "description" }]);
 
-メディア付き投稿:
-
-```ts
-await kt.media("image", [
-  { file, alt: "description" },
-]);
-```
-
-投票:
-
-```ts
-await kt.poll("poll", {
+await client.poll("poll", {
   options: ["A", "B"],
   durationHours: 24,
+  isAnonymous: true,
 });
 ```
 
-`visibility` は `"public"`、`"followers"`、`"circle"` を受け付けます。`"circle"` の場合は `viewerCircleId` も渡します。
+### 操作
+
+```ts
+await client.posts.like(post);
+await client.posts.repost(post);
+await client.posts.bookmark(post);
+await client.posts.react(post, "👍");
+await client.posts.vote(post, 1);
+
+const translation = await client.posts.translate(post, "en");
+console.log(translation.translatedText);
+```
+
+### 予約投稿と下書き
+
+```ts
+const scheduled = await client.posts.scheduled();
+const first = scheduled.scheduledPosts[0];
+
+if (first) {
+  await client.posts.updateScheduled(first, {
+    content: "updated",
+    scheduledFor: new Date(Date.now() + 3_600_000).toISOString(),
+  });
+}
+
+await client.posts.createDraft({ content: "draft" });
+```
 
 ## タイムライン
 
 ```ts
-const home = await kt.timeline.home({ limit: 20 });
-const latest = await kt.timeline.latest({ limit: 20 });
-const following = await kt.timeline.following({ limit: 20 });
-const trending = await kt.timeline.trending();
-const recommended = await kt.timeline.recommended({ limit: 20 });
-```
-
-## 投稿操作
-
-```ts
-const post = await kt.posts.fetch(631800);
-const replies = await kt.posts.replies(post);
-const quotes = await kt.posts.quotes(post);
-const likes = await kt.posts.likes(post);
-
-await kt.posts.react(post, "👍");
-await kt.posts.unreact(post, "👍");
-await kt.posts.bookmark(post);
-await kt.posts.unbookmark(post);
-```
-
-## ユーザー
-
-```ts
-const profile = await kt.users.get("@karon");
-
-await kt.users.follow(profile.user);
-await kt.users.unfollow(profile.user);
-await kt.users.block(profile.user);
-await kt.users.mute(profile.user);
-```
-
-`kt.users.follow("@karon")` のようにusernameを渡した場合は、内部でユーザー取得してIDに変換します。
-
-## DM
-
-```ts
-const dm = await kt.dm.with("@karon");
-
-await dm.send("hello");
-await dm.read();
-```
-
-既存グループIDを使う場合:
-
-```ts
-const dm = kt.dm.group(123);
-const messages = await dm.messages({ limit: 20 });
-```
-
-## 検索
-
-```ts
-const result = await kt.search.all({ q: "karotter" });
-const users = await kt.search.users({ q: "karon" });
-const posts = await kt.search.posts({ q: "hello", type: "latest" });
-const topics = await kt.search.trendingTopics(5);
-```
-
-## その他のAPI
-
-リバースエンジニアリング済みのHTTP endpointは action から触れます。
-
-```ts
-await kt.auth.sessions();
-await kt.follows.pendingRequests();
-await kt.notifications.list({ limit: 20 });
-await kt.social.circles();
-await kt.radio.active();
-await kt.draw.rooms();
-await kt.news.list();
-await kt.boards.list();
-await kt.apiKeys.list();
-await kt.developer.posts({ limit: 20 });
-await kt.legal.summary();
-await kt.misc.report({
-  targetType: "POST",
-  targetId: 631800,
-  reason: "SPAM",
+const home = await client.timeline.home({ mode: "latest", limit: 20 });
+const recommended = await client.timeline.recommended({ limit: 20 });
+const publicFeed = await client.timeline.public({
+  kind: "recommended",
+  mode: "algorithm",
+  limit: 20,
 });
-```
 
-管理APIは管理者セッション前提です。
-
-```ts
-await kt.admin.dashboard();
-await kt.admin.users({ limit: 20 });
-await kt.admin.reports();
-```
-
-## リアルタイム
-
-ログイン時に接続する場合:
-
-```ts
-const kt = await karotter.login(
-  { id: "username", password: "password" },
-  { connect: true },
+await client.posts.reportPublicFeedViews(
+  publicFeed.posts.slice(0, 10),
 );
 ```
 
-後から接続する場合:
+`/v2/feed/views` に失敗する環境では、従来の `client.posts.reportViews()` を利用できます。
+
+## ユーザーとフォロー
 
 ```ts
-kt.connect();
+const user = await client.users.get("username");
+const followers = await client.users.followers(user);
+const ranking = await client.users.levelRanking({ limit: 20 });
+
+await client.follows.follow(user);
+await client.follows.mute(user);
+await client.follows.hideRekarots(user);
 ```
 
-イベント:
+`ResourceTarget` を受けるメソッドには数値 ID、username、`{ id }` を渡せます。username は必要に応じて SDK が `/users/{username}` で ID に解決します。
+
+## Community
 
 ```ts
-kt.on("notification", (payload) => {
-  console.log(payload.type);
+const form = new FormData();
+form.append("name", "TypeScript");
+form.append("description", "TypeScript community");
+form.append("joinType", "OPEN");
+
+const { community } = await client.communities.create(form);
+const detail = await client.communities.fetch(community.id);
+const members = await client.communities.members(community.id, { limit: 100 });
+const posts = await client.communities.posts(community.id, {
+  tab: "latest",
+  limit: 20,
 });
 
-kt.on("dm:new-message", ({ message }) => {
-  console.log(message.content);
+await client.communities.join(community.id);
+await client.communities.addToHomeTimeline(community.id);
+```
+
+管理権限がある場合はメンバーの Role、所有権移譲、ルール、非表示投稿、Community 内レポートを操作できます。
+
+```ts
+await client.communities.updateMemberRole(community.id, 42, "MODERATOR");
+await client.communities.updateRules(community.id, {
+  rules: ["Be kind"],
+});
+await client.communities.reorderHomeTimelines([community.id]);
+```
+
+Community 検索は `client.search.communities({ q: "TypeScript" })` です。
+
+## Guild、Channel、Guild Bot
+
+### Guild
+
+```ts
+const { guild } = await client.guilds.create({ name: "Developers" });
+const { channel } = await client.guilds.createChannel(guild.id, {
+  name: "general",
+  type: "TEXT",
 });
 
-kt.on("draw:stroke", ({ roomId }) => {
-  console.log(roomId);
+const members = await client.guilds.members(guild.id, { limit: 200 });
+const roles = await client.guilds.roles(guild.id);
+```
+
+Guild API は Invite、Ban、Role、Event、Audit Log、Channel 並び替え、Voice State を扱います。
+
+```ts
+const { invite } = await client.guilds.createInvite(guild.id, {
+  maxUses: 10,
+});
+
+await client.guilds.acceptInvite(invite.code);
+await client.guilds.createRole(guild.id, { name: "Maintainer" });
+```
+
+### Channel
+
+```ts
+await client.channels.sendMessage(channel.id, {
+  content: "hello",
+});
+
+const messages = await client.channels.messages(channel.id, { limit: 50 });
+await client.channels.reactToMessage(messages.messages[0]?.id ?? 0, "👍");
+```
+
+Stage、Voice、Forum にも対応します。
+
+```ts
+await client.channels.joinVoice(channel.id);
+await client.channels.createStage(channel.id, { topic: "Weekly sync" });
+await client.channels.createForumPost(channel.id, {
+  title: "RFC",
+  content: "proposal",
 });
 ```
+
+### Guild Bot
+
+```ts
+const created = await client.guildBots.createApplication({
+  name: "release-bot",
+});
+
+const applications = await client.guildBots.applications();
+const token = await client.guildBots.regenerateToken(created.application.id);
+
+console.log(applications.applications, token.token);
+```
+
+Token はレスポンスで返された時点で安全に保存してください。
+
+Bot Token を使う Bot API は、Application 管理 API と認証方式が異なります。
+
+```ts
+const botClient = karotter.create({
+  botToken: process.env.KAROTTER_BOT_TOKEN,
+});
+
+const guilds = await botClient.bot.guilds();
+const guildId = guilds.guilds[0]?.id ?? 0;
+const channels = await botClient.bot.channels(guildId);
+
+await botClient.bot.sendMessage(channels.channels[0]?.id ?? 0, "hello");
+await botClient.bot.upsertCommand({
+  name: "ping",
+  description: "Reply with pong",
+});
+```
+
+## DM と通知
+
+```ts
+const conversation = await client.dm.with("username");
+await conversation.send("hello");
+
+const unread = await client.dm.unreadCount();
+const notifications = await client.notifications.list({ limit: 30 });
+
+console.log(unread, notifications.notifications);
+```
+
+```ts
+await conversation.startCall();
+await conversation.joinCall();
+await conversation.leaveCall();
+```
+
+## Subscription と OAuth Client
+
+```ts
+const plans = await client.subscriptions.plans();
+const current = await client.subscriptions.me();
+
+const checkout = await client.subscriptions.checkout({
+  planId: plans.plans[0]?.id ?? "",
+});
+
+console.log(current.summary, checkout.url);
+```
+
+Gift と Portal も同じ API グループにあります。
+
+```ts
+const gifts = await client.subscriptions.receivedGifts();
+await client.subscriptions.respondToGift(gifts.gifts[0]?.id ?? "", {
+  action: "ACCEPT",
+});
+
+const portal = await client.subscriptions.portal();
+console.log(portal.url);
+```
+
+OAuth Client:
+
+```ts
+const created = await client.oauth.createClient({
+  name: "my-app",
+  redirectUris: ["https://example.com/callback"],
+});
+
+const secret = await client.oauth.regenerateClientSecret(created.client.id);
+console.log(secret.secret);
+```
+
+OAuth 2 認可コードフロー:
+
+```ts
+const code = process.env.KAROTTER_OAUTH_CODE ?? "";
+const codeVerifier = process.env.KAROTTER_OAUTH_CODE_VERIFIER ?? "";
+const codeChallenge = process.env.KAROTTER_OAUTH_CODE_CHALLENGE ?? "";
+const authorizeUrl = client.oauth.authorizeUrl({
+  clientId: process.env.KAROTTER_OAUTH_CLIENT_ID ?? "",
+  redirectUri: "https://example.com/callback",
+  scope: "profile email offline_access",
+  state: crypto.randomUUID(),
+  codeChallenge,
+  codeChallengeMethod: "S256",
+});
+
+const token = await client.oauth.exchangeToken({
+  grant_type: "authorization_code",
+  code,
+  redirect_uri: "https://example.com/callback",
+  client_id: process.env.KAROTTER_OAUTH_CLIENT_ID,
+  code_verifier: codeVerifier,
+});
+
+const profile = await client.oauth.userInfo(token.access_token);
+```
+
+## 公開 Developer API
+
+`client.developer` は API Key 向けの `/developer` API を公開します。投稿、タイムライン、ユーザー、フォロー申請、ニュース、Story、Board、DM、通知、レスポンス Schema、Twitter v2 互換 API を扱えます。
+
+```ts
+const apiClient = karotter.create({
+  accessToken: process.env.KAROTTER_API_KEY,
+});
+
+const timeline = await apiClient.developer.timeline({ limit: 20 });
+const post = await apiClient.developer.createPost({ content: "API post" });
+const schema = await apiClient.developer.postSchema();
+const tweets = await apiClient.developer.v2.searchRecent({
+  query: "karotter",
+});
+```
+
+## Radio と Draw
+
+const spaceId = Number(process.env.KAROTTER_SPACE_ID ?? "0");
+const token = await client.radio.realtimeToken(spaceId);
+await client.radio.join(spaceId);
+
+console.log(token.token);
+
+const roomId = process.env.KAROTTER_DRAW_ROOM_ID ?? "";
+const token = await client.draw.realtimeToken(roomId);
+await client.draw.joinRoom(roomId);
+
+console.log(token.token);
+
+## リアルタイム
+
+```ts
+client
+  .on("dm:new-message", ({ message }) => console.log(message))
+  .on("notification", (notification) => console.log(notification))
+  .on("guild:message-create", ({ channelId, message }) => {
+    console.log(channelId, message);
+  });
+
+client.connect();
+```
+
+`client.disconnect()` で Socket.IO 接続だけを切断し、`client.destroy()` で接続と認証状態を破棄します。
 
 ## 低レベルリクエスト
 
-未調査の新規endpointや一時的な検証は `request()` で叩けます。
+```ts
+const response = await client.request<{ message: string }>(
+  "PATCH",
+  "/users/settings",
+  {
+    body: { showReadReceipts: false },
+    query: { source: "sdk" },
+  },
+);
+```
+
+`request()` でも認証ヘッダ、Cookie、CSRF、自動 Token refresh、エラー正規化が適用されます。
+
+## 設定
 
 ```ts
-const response = await kt.request("GET", "/posts/631800");
-
-await kt.request("POST", "/reports", {
-  body: {
-    targetType: "POST",
-    targetId: 631800,
-    reason: "SPAM",
-  },
+const client = karotter.create({
+  baseUrl: "https://api.karotter.com",
+  timeoutMs: 20_000,
+  clientType: "web",
+  deviceName: "CLI",
+  accessToken: process.env.KAROTTER_ACCESS_TOKEN,
+  refreshToken: process.env.KAROTTER_REFRESH_TOKEN,
+  autoCsrfRetry: true,
+  autoTokenRefresh: true,
+  botToken: process.env.KAROTTER_BOT_TOKEN,
+  connect: false,
 });
 ```
+
+`baseUrl` に `/api` は付けません。独自 `axiosInstance` を渡す場合は `baseURL` と Cookie 管理を呼び出し側で整合させてください。
 
 ## エラー処理
 
 ```ts
 import {
-  BannedError,
   KarotterError,
   RateLimitError,
-  ValidationError,
+  TwoFactorRequiredError,
 } from "@mikumiku-jp/karotter.js";
 
 try {
-  await kt.post("hello");
+  await client.timeline.home();
 } catch (error) {
-  if (error instanceof BannedError) {
-    console.error(error.banReason ?? error.message);
+  if (error instanceof TwoFactorRequiredError) {
+    console.error(error.twoFactorToken);
   } else if (error instanceof RateLimitError) {
     console.error(error.retryAfterMs);
-  } else if (error instanceof ValidationError) {
-    console.error(error.data);
   } else if (error instanceof KarotterError) {
-    console.error(error.status, error.message);
+    console.error(error.status, error.code, error.data);
   } else {
     throw error;
   }
 }
 ```
 
-## 設定
+## 関連文書
 
-```ts
-const kt = karotter.create({
-  baseUrl: "https://api.karotter.com",
-  timeoutMs: 15000,
-  clientType: "web",
-  deviceId: "device-id",
-  deviceName: "Node.js",
-  acceptLanguage: "ja-JP",
-  userAgent: "custom user agent",
-  requestedWith: null,
-  autoCsrfRetry: true,
-  autoTokenRefresh: true,
-});
-```
-
-`requestedWith` を `null` にすると `X-Requested-With` を送りません。`clientType: "android"` の既定値は `jp.karon.karotter` です。
-
-## TypeScript
-
-配布物はESM、CommonJS、型定義を含みます。ソースはTypeScriptだけです。
-
-```ts
-import type { Karotter, Post, PostOptions, RegisterInput } from "@mikumiku-jp/karotter.js";
-```
-
-ビルド:
-
-```bash
-npm run typecheck
-npm run build
-```
+- [SDK リファレンス](./karotter-js.md)
+- [HTTP API リファレンス](./api-reference.md)
+- [HTTP・認証・リアルタイム仕様](./api-spec.md)

@@ -55,6 +55,19 @@ export class AuthError extends KarotterError {
   override readonly name: string = "AuthError";
 }
 
+export class TwoFactorRequiredError extends AuthError {
+  override readonly name: string = "TwoFactorRequiredError";
+  readonly twoFactorToken: string;
+
+  constructor(twoFactorToken: string) {
+    super("Two-factor authentication required", {
+      code: "TWO_FACTOR_REQUIRED",
+      data: { twoFactorToken },
+    });
+    this.twoFactorToken = twoFactorToken;
+  }
+}
+
 export class BadRequestError extends KarotterError {
   override readonly name: string = "BadRequestError";
 }

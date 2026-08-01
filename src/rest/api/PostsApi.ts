@@ -7,8 +7,10 @@ import type {
   PostAnalytics,
   Post,
   PostDraft,
+  PostTranslation,
   ReplyTargets,
   ScheduledPost,
+  ScheduledPostUpdateInput,
   TimelineQuery,
 } from "../../structures/Post.js";
 import type { User } from "../../structures/User.js";
@@ -59,6 +61,11 @@ export interface BookmarkListQuery extends Pagination {
 
 export interface RecommendedQuery extends Pagination {
   mode?: "algorithm" | "latest" | "beta" | (string & {});
+}
+
+export interface PublicFeedQuery extends Pagination {
+  kind?: string;
+  mode?: string;
 }
 
 export interface FetchPostQuery {
@@ -247,6 +254,10 @@ export class PostsApi {
       );
   }
 
+  publicFeed(query?: PublicFeedQuery): Promise<PostListResponse> {
+    return this.rest.get("/v2/feed/public", encodeQuery(query));
+  }
+
   bookmarks(query?: BookmarkListQuery): Promise<PostListResponse> {
     return this.rest
       .get<PostListResponse>("/posts/me/bookmarks", encodeQuery(query))
@@ -273,6 +284,13 @@ export class PostsApi {
 
   cancelScheduled(id: Snowflake | string): Promise<MessageEnvelope> {
     return this.rest.delete(`/posts/scheduled/${encodeId(id)}`);
+  }
+
+  updateScheduled(
+    id: Snowflake | string,
+    input: ScheduledPostUpdateInput,
+  ): Promise<{ message?: string; scheduledPost?: ScheduledPost }> {
+    return this.rest.put(`/posts/scheduled/${encodeId(id)}`, input);
   }
 
   like(id: Snowflake | string): Promise<MessageEnvelope> {
@@ -358,6 +376,23 @@ export class PostsApi {
   reportViews(postIds: Array<Snowflake | string>): Promise<{ recorded: number }> {
     return this.rest.post("/posts/batch-views", {
       postIds: postIds.map((id) => Number(id)),
+    });
+  }
+
+  reportPublicFeedViews(
+    postIds: Array<Snowflake | string>,
+  ): Promise<{ recorded: number }> {
+    return this.rest.post("/v2/feed/views", {
+      postIds: postIds.map((id) => Number(id)),
+    });
+  }
+
+  translate(
+    id: Snowflake | string,
+    targetLocale: string,
+  ): Promise<PostTranslation> {
+    return this.rest.post(`/posts/${encodeId(id)}/translate`, {
+      targetLocale,
     });
   }
 

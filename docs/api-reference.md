@@ -1,14 +1,16 @@
 # Karotter API Reference
 
-Karotter のWeb SPAバンドル、Android APK 0.2.2、書き込み副作用のないHTTPプローブから再構成した内部APIリファレンスです
+2026-08-01 時点の Karotter Web SPA、公式 API ドキュメント画面、Android APK 0.2.2、書き込み副作用のない HTTP プローブから再構成した非公式 API リファレンスです。
 
 解析元:
 
 | 種別 | 内容 |
 |---|---|
-| Web SPA | `karotter.com` のVite/Reactチャンク |
+| Web SPA | `index-BmTVCph9.js` から再帰取得した 160 JavaScript chunk |
+| Web API 定義 | `api-docs-BRKNRS3h.js` の公開 API 17分類・85 endpoint |
+| 直接呼び出し | 現行 SPA から正規化した 297 Method/Path |
 | Android | `KarotterApp` release `0.2.2` APK |
-| 動的確認 | GET / OPTIONS / OAuth redirect / 公開endpointのレスポンス |
+| 動的確認 | GET / OPTIONS / OAuth redirect / 公開 endpoint のレスポンス |
 
 
 パスはすべて `https://api.karotter.com/api` からの相対です。
@@ -26,11 +28,14 @@ Karotter のWeb SPAバンドル、Android APK 0.2.2、書き込み副作用の�
 | [通知](#通知) | 通知一覧、既読、push登録 |
 | [検索 / Discover](#検索--discover) | 検索、トレンド、Discover |
 | [Social](#social) | circle、list、story、質問、link preview |
+| [Community](#community) | Community CRUD、参加、管理、ホーム表示 |
+| [Guild / Channel / Bot](#guild--channel--bot) | Guild、Channel、Bot Application、Bot Token API |
 | [Radio / Spaces](#radio--spaces) | space作成、参加、WebRTC関連 |
 | [Draw](#draw) | 絵チャルーム、chat、layer同期 |
 | [News](#news) | ニュース記事、コメント、review |
 | [Boards](#boards) | 掲示板、thread、reply、reaction |
 | [API Keys / Developer API](#api-keys--developer-api) | API key、開発者API、Twitter v2互換 |
+| [Subscription / OAuth 2](#subscription--oauth-2) | Subscription、Gift、OAuth Client、認可コードフロー |
 | [Legal / Misc](#legal--misc) | 規約、お問い合わせ、通報 |
 | [管理API](#管理api) | `/control-room-x9k2` 配下 |
 | [Socket.IO](#socketio) | realtime endpointとevent |
@@ -60,6 +65,7 @@ endpoint表は次の形式です。
 |---|---|
 | Primary API | `https://api.karotter.com/api` |
 | Mirror JP | `https://api.karotter.jp/api` |
+| Web same-origin | `https://karotter.com/api` |
 | Mirror NET | `https://api.karotter.net/api` |
 | Mirror karon.jp | `https://apikarotter.karon.jp/api` |
 | Socket.IO | `https://api.karotter.com/socket.io` |
@@ -74,6 +80,8 @@ endpoint表は次の形式です。
 | `x-device-id` | UUID v4 | localStorage / Capacitor Preferencesに保存 |
 | `x-csrf-token` | CSRF token | 書き込み系で必要 |
 | `Authorization` | `Bearer {accessToken}` | 認証時 |
+| `Authorization` | `Bot {botToken}` | Bot Token API |
+| `x-api-key` | `{apiKey}` | Developer API。Bearer API Key も公式文書に記載 |
 | `Cookie` | `karotter_at`, `karotter_rt`, `karotter_csrf` | ブラウザでは自動 |
 
 Android WebView登録成功通信では、`Origin: https://localhost`、`Referer: https://localhost/`、Android WebView UA、Android client hintsが出ます。`X-Requested-With: jp.karon.karotter` は成功登録通信では出ていません。
@@ -243,6 +251,15 @@ JSON:
 }
 ```
 
+2FA が必要な場合は Token 本体ではなく challenge が返ります。
+
+```json
+{
+  "twoFactorRequired": true,
+  "twoFactorToken": "temporary-token"
+}
+```
+
 ### `POST /auth/register`
 
 認証: 不要。既存セッションつき登録も観測。
@@ -302,6 +319,13 @@ Turnstile:
 | POST | `/auth/me/email` | 要 | `email` | SPA上は現パスワードなし |
 | POST | `/auth/me/email/resend` | 要 | なし | 再送 |
 | POST | `/auth/resend-verification` | 不要 | `email` | メール指定再送 |
+| POST | `/auth/login/2fa` | 不要 | `twoFactorToken`, `code` | 2FA ログイン完了 |
+| GET | `/auth/2fa/setup` | 要 | なし | Secret・QR 情報 |
+| POST | `/auth/2fa/enable` | 要 | `code` | 有効化・Backup Code 発行 |
+| POST | `/auth/2fa/disable` | 要 | `code?`, `backupCode?`, `password?` | 無効化 |
+| GET | `/auth/legal-quiz` | 任意 | なし | 規約クイズ |
+| POST | `/auth/legal-quiz/grade` | 任意 | `legalQuizToken`, `legalQuizAnswers` | 採点 |
+| DELETE | `/auth/oauth/{provider}` | 要 | なし | OAuth 接続解除 |
 | GET | `/auth/oauth/google/start` | 不要 | `mode`, `frontendOrigin?`, `next?`, `addAccount?` | 302 |
 | GET | `/auth/oauth/discord/start` | 不要 | 同上 | 302 |
 | GET | `/auth/oauth/{provider}/callback` | 不要 | OAuth callback | サーバ処理 |
@@ -354,6 +378,8 @@ pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDur
 | DELETE | `/posts/{id}` | 要 | なし | 削除 |
 | GET | `/posts/timeline` | 要 | `page`, `limit`, `mode` | mode: `latest` / `trending` / `following` |
 | GET | `/posts/recommended` | 不要 | `page`, `limit`, `cursor` | 公開推奨投稿 |
+| GET | `/v2/feed/public` | 不要 | `kind?`, `mode?`, `page?`, `limit?`, `cursor?` | 公開フィード |
+| POST | `/v2/feed/views` | 任意 | `postIds` | 公開フィード View 記録 |
 | GET | `/posts/trending` | 不要 | なし | トレンド |
 | GET | `/posts/{id}/replies` | 任意 | `page`, `limit`, `cursor` | 削除済み親でも空配列200を観測 |
 | GET | `/posts/{id}/quotes` | 任意 | `page`, `limit`, `cursor` | 引用一覧 |
@@ -364,6 +390,8 @@ pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDur
 | GET | `/posts/{id}/reply-targets` | 要 | なし | 返信対象候補 |
 | GET | `/posts/{id}/analytics` | 要 | なし | 投稿分析 |
 | POST | `/posts/{id}/like` | 要 | なし | いいね |
+| PUT | `/posts/scheduled/{id}` | 要 | 予約投稿更新 payload | 予約投稿更新 |
+| POST | `/posts/{id}/translate` | 任意 | `targetLanguage` | 投稿翻訳 |
 | DELETE | `/posts/{id}/like` | 要 | なし | いいね解除 |
 | POST | `/posts/{id}/rekarot` | 要 | なし | リカロート |
 | DELETE | `/posts/{id}/rekarot` | 要 | なし | リカロート解除 |
@@ -402,6 +430,7 @@ pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDur
 | GET | `/users/{userId}/following` | 不要 | `page`, `limit`, `cursor` | フォロー |
 | GET | `/users/{userId}/mutual-followers` | 要 | `page`, `limit`, `cursor` | 共通フォロワー |
 | GET | `/users/recommended` | 不要 | `limit` | おすすめユーザー |
+| GET | `/users/level-ranking` | 不要 | `page?`, `limit?` | Level ranking |
 | GET | `/users/username/quota` | 要 | なし | username変更枠 |
 | PATCH | `/users/profile` | 要 | profile JSON | プロフィール更新 |
 | PATCH | `/users/status` | 要 | `status`, `statusMessage?` | オンライン状態 |
@@ -453,6 +482,7 @@ pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDur
 | Method | Path | 認証 | Body / Query | 備考 |
 |---|---|---|---|---|
 | GET | `/dm/groups` | 要 | `limit`, `cursor` | グループ一覧 |
+| GET | `/dm/unread/count` | 要 | なし | DM 未読数 |
 | POST | `/dm/groups` | 要 | `userIds` | グループ作成 |
 | POST | `/dm/start` | 要 | `targetUserId` | 1対1開始 |
 | GET | `/dm/groups/{groupId}` | 要 | なし | グループ取得 |
@@ -513,6 +543,7 @@ pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDur
 |---|---|---|---|---|
 | GET | `/search` | 不要 | `q`, `page?`, `limit?`, `cursor?` | 統合検索 |
 | GET | `/search/users` | 不要 | 同上 | ユーザー |
+| GET | `/search/communities` | 不要 | `q`, `page?`, `limit?`, `cursor?` | Community 検索 |
 | GET | `/search/posts` | 不要 | `q`, `type?`, `page?`, `limit?`, `cursor?` | 投稿 |
 | GET | `/search/hashtags` | 不要 | `q`, `page?`, `limit?`, `cursor?` | hashtag |
 | GET | `/search/trending/topics` | 不要 | `limit` | topic |
@@ -527,10 +558,12 @@ pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDur
 |---|---|---|---|---|
 | GET | `/social/circles` | 要 | なし | circle一覧 |
 | POST | `/social/circles` | 要 | `name`, `memberIds?` | circle作成 |
+| PATCH | `/social/circles/{id}` | 要 | `name?`, `memberIds?` | circle更新 |
 | DELETE | `/social/circles/{id}` | 要 | なし | circle削除 |
 | POST | `/social/circles/{circleId}/members` | 要 | `userId` | member追加 |
 | DELETE | `/social/circles/{circleId}/members/{userId}` | 要 | なし | member削除 |
 | GET | `/social/lists` | 要 | なし | list一覧 |
+| PATCH | `/social/lists/{id}` | 要 | `name?`, `description?`, `isPublic?`, `memberIds?` | list更新 |
 | POST | `/social/lists` | 要 | `name`, `description?`, `isPublic?` | list作成 |
 | DELETE | `/social/lists/{id}` | 要 | なし | list削除 |
 | GET | `/social/lists/{listId}/posts` | 要 | `page`, `limit`, `cursor` | list投稿 |
@@ -555,6 +588,108 @@ pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDur
 | GET | `/social/link-preview` | 不要 | `url` | OGP取得。SSRFフィルタあり |
 | GET | `/social/link-preview-image` | 不要 | `url` | 画像proxy。SSRFフィルタあり |
 
+## Community
+
+| Method | Path | 認証 | Body / Query | 備考 |
+|---|---|---|---|---|
+| GET | `/communities` | 任意 | `page?`, `limit?`, `cursor?` | 一覧 |
+| POST | `/communities` | 要 | JSON または multipart | 作成 |
+| GET | `/communities/{communityId}` | 任意 | なし | 詳細 |
+| PATCH | `/communities/{communityId}` | 要 | JSON または multipart | 更新 |
+| DELETE | `/communities/{communityId}` | 要 | なし | 削除 |
+| POST | `/communities/{communityId}/join` | 要 | 参加 payload | 参加または申請 |
+| POST | `/communities/{communityId}/leave` | 要 | なし | 退出 |
+| POST | `/communities/{communityId}/invite` | 要 | 招待 payload | 招待 |
+| GET | `/communities/{communityId}/members` | 任意 | `page?`, `limit?`, `cursor?` | メンバー |
+| DELETE | `/communities/{communityId}/members/{userId}` | 要 | なし | メンバー削除 |
+| PATCH | `/communities/{communityId}/members/{userId}/role` | 要 | `role` | Role 更新 |
+| POST | `/communities/{communityId}/owner-transfer` | 要 | `userId` | 所有権移譲 |
+| GET | `/communities/{communityId}/posts` | 任意 | `tab?`, `page?`, `limit?`, `cursor?` | 投稿 |
+| POST | `/communities/{communityId}/posts/{postId}/hide` | 要 | なし | 投稿非表示 |
+| PUT | `/communities/{communityId}/rules` | 要 | `rules` | ルール更新 |
+| GET | `/communities/{communityId}/reports` | 要 | `page?`, `limit?`, `cursor?` | レポート |
+| PATCH | `/communities/{communityId}/reports/{reportId}` | 要 | 対応 payload | レポート更新 |
+| GET | `/communities/home-timelines` | 要 | なし | ホーム表示一覧 |
+| POST | `/communities/{communityId}/home-timeline` | 要 | なし | ホームへ追加 |
+| DELETE | `/communities/{communityId}/home-timeline` | 要 | なし | ホームから削除 |
+| PUT | `/communities/home-timelines/reorder` | 要 | `communityIds` | 並び替え |
+
+## Guild / Channel / Bot
+
+### Guild
+
+| Method | Path | 認証 | Body / Query | 備考 |
+|---|---|---|---|---|
+| GET | `/guilds` | 要 | `page?`, `limit?`, `cursor?` | 一覧 |
+| POST | `/guilds` | 要 | JSON または multipart | 作成 |
+| PATCH | `/guilds/{guildId}` | 要 | JSON または multipart | 更新 |
+| DELETE | `/guilds/{guildId}` | 要 | なし | 削除 |
+| GET | `/guilds/{guildId}/audit-logs` | 要 | paging・filter | 監査ログ |
+| GET | `/guilds/{guildId}/bans` | 要 | なし | Ban 一覧 |
+| POST | `/guilds/{guildId}/bans/{userId}` | 要 | `reason?` | Ban |
+| DELETE | `/guilds/{guildId}/bans/{userId}` | 要 | なし | Ban 解除 |
+| GET | `/guilds/{guildId}/channels` | 要 | なし | Channel 一覧 |
+| POST | `/guilds/{guildId}/channels` | 要 | Channel payload | 作成 |
+| PUT | `/guilds/{guildId}/channels/reorder` | 要 | 並び順 payload | 並び替え |
+| GET | `/guilds/{guildId}/events` | 要 | paging | Event 一覧 |
+| POST | `/guilds/{guildId}/events` | 要 | Event payload | 作成 |
+| PATCH | `/guilds/{guildId}/events/{eventId}` | 要 | Event payload | 更新 |
+| DELETE | `/guilds/{guildId}/events/{eventId}` | 要 | なし | 削除 |
+| GET | `/guilds/{guildId}/invites` | 要 | なし | Invite 一覧 |
+| POST | `/guilds/{guildId}/invites` | 要 | Invite payload | 作成 |
+| DELETE | `/guilds/{guildId}/invites/{code}` | 要 | なし | 削除 |
+| POST | `/invites/{code}` | 要 | なし | Invite 受諾 |
+| GET | `/guilds/{guildId}/members` | 要 | paging | Member 一覧 |
+| PATCH | `/guilds/{guildId}/members/{userId}` | 要 | Member payload | 更新 |
+| DELETE | `/guilds/{guildId}/members/{userId}` | 要 | なし | 削除 |
+| PUT | `/guilds/{guildId}/members/{userId}/roles/{roleId}` | 要 | なし | Role 追加 |
+| DELETE | `/guilds/{guildId}/members/{userId}/roles/{roleId}` | 要 | なし | Role 削除 |
+| POST | `/guilds/{guildId}/members/{userId}/transfer-ownership` | 要 | なし | 所有権移譲 |
+| GET | `/guilds/{guildId}/messages/search` | 要 | 検索 query | Message 検索 |
+| GET | `/guilds/{guildId}/roles` | 要 | なし | Role 一覧 |
+| POST | `/guilds/{guildId}/roles` | 要 | Role payload | 作成 |
+| PATCH | `/guilds/{guildId}/roles/{roleId}` | 要 | Role payload | 更新 |
+| DELETE | `/guilds/{guildId}/roles/{roleId}` | 要 | なし | 削除 |
+| GET | `/guilds/{guildId}/voice-states` | 要 | なし | Voice State |
+
+### Channel
+
+| Method | Path | 認証 | Body / Query | 備考 |
+|---|---|---|---|---|
+| PATCH | `/channels/{channelId}` | 要 | Channel payload | 更新 |
+| DELETE | `/channels/{channelId}` | 要 | なし | 削除 |
+| PUT | `/channels/{channelId}/permissions/{targetId}/{permission}` | 要 | Permission payload | 権限更新 |
+| POST | `/channels/{channelId}/voice/join` | 要 | なし | Voice 参加 |
+| POST | `/channels/{channelId}/voice/leave` | 要 | なし | Voice 退出 |
+| POST | `/channels/{channelId}/stage` | 要 | Stage payload | Stage 作成 |
+| PATCH | `/channels/{channelId}/stage` | 要 | Stage payload | Stage 更新 |
+| DELETE | `/channels/{channelId}/stage` | 要 | なし | Stage 削除 |
+| PATCH | `/channels/{channelId}/stage/me` | 要 | State payload | 自分の Stage State |
+| PATCH | `/channels/{channelId}/stage/participants/{userId}` | 要 | State payload | 参加者更新 |
+| GET | `/channels/{channelId}/forum-posts` | 要 | paging | Forum 一覧 |
+| POST | `/channels/{channelId}/forum-posts` | 要 | JSON または multipart | Forum 作成 |
+| GET | `/channels/{channelId}/forum-posts/{postId}` | 要 | なし | Forum 詳細 |
+| POST | `/channels/{channelId}/forum-posts/{postId}/replies` | 要 | JSON または multipart | Forum 返信 |
+| GET | `/channels/{channelId}/messages` | 要 | paging | Message 一覧 |
+| POST | `/channels/{channelId}/messages` | 要 | JSON または multipart | Message 送信 |
+| PATCH | `/channels/messages/{messageId}` | 要 | Message payload | Message 更新 |
+| DELETE | `/channels/messages/{messageId}` | 要 | なし | Message 削除 |
+| POST | `/channels/messages/{messageId}/reactions` | 要 | `reaction` | Reaction |
+
+### Bot Application と Bot Token
+
+| Method | Path | 認証 | Body / Query | 備考 |
+|---|---|---|---|---|
+| GET | `/guild-bots/applications` | 要 | なし | Application 一覧 |
+| POST | `/guild-bots/applications` | 要 | Application payload | 作成・Token 発行 |
+| DELETE | `/guild-bots/applications/{id}` | 要 | なし | 削除 |
+| POST | `/guild-bots/applications/{id}/token` | 要 | なし | Token 再生成 |
+| GET | `/developer/guilds` | Bot Token | なし | 導入済み Guild |
+| GET | `/developer/guilds/{guildId}/channels` | Bot Token | なし | 閲覧可能 Channel |
+| POST | `/developer/channels/{channelId}/messages` | Bot Token | `content` | Bot Message |
+| POST | `/developer/applications/commands` | Bot Token | Command payload | Slash Command upsert |
+| PUT | `/developer/applications/commands/{commandId}/permissions` | Bot Token | `guildId`, `permissions` | Command 権限置換 |
+
 ## Radio / Spaces
 
 | Method | Path | 認証 | Body / Query | 備考 |
@@ -576,7 +711,9 @@ pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDur
 | DELETE | `/radio/{id}/participants/{participantId}/invite-speaker` | 要 | なし | 招待取消 |
 | PATCH | `/radio/{id}/participants/{participantId}/mute` | 要 | `muted` | mute |
 | PATCH | `/radio/{id}/participants/{participantId}/role` | 要 | `role` | role変更 |
+| POST | `/radio/{id}/participants/{participantId}/transfer-host` | 要 | なし | Host 移譲 |
 | PATCH | `/radio/{id}/settings` | 要 | settings JSON | 設定 |
+| GET | `/radio/{id}/realtime-token` | 要 | なし | Realtime Token |
 
 ## Draw
 
@@ -591,6 +728,7 @@ pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDur
 | POST | `/draw/rooms/{roomId}/chat` | 要 | `content` | chat |
 | POST | `/draw/rooms/{roomId}/invite/rotate` | 要 | なし | invite更新 |
 | PUT | `/draw/rooms/{roomId}/layers` | 要 | layers JSON | layer同期 |
+| GET | `/draw/rooms/{roomId}/realtime-token` | 要 | なし | Realtime Token |
 
 ## News
 
@@ -648,38 +786,83 @@ pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDur
 
 ### Developer REST
 
-開発者APIは `kar_live_*` 系API keyの利用を想定した公開APIです。
+公開 Developer API は `/developer` prefix を使い、`x-api-key` または `Authorization: Bearer {apiKey}` で認証します。権限は API Key の scope で制限されます。
 
-| Method | Path | 認証 | Body / Query | 備考 |
-|---|---|---|---|---|
-| GET | `/developer/posts` | API key | `page`, `limit`, `cursor` | 投稿一覧 |
-| GET | `/developer/posts/{id}` | API key | なし | 投稿取得 |
-| GET | `/developer/posts/{id}/replies` | API key | `page`, `limit`, `cursor` | replies |
-| GET | `/developer/posts/{id}/quotes` | API key | `page`, `limit`, `cursor` | quotes |
-| POST | `/developer/posts` | API key | `content` | 投稿作成 |
-| POST | `/developer/posts/{id}/like` | API key | なし | like |
-| DELETE | `/developer/posts/{id}/like` | API key | なし | unlike |
-| POST | `/developer/posts/{id}/bookmark` | API key | なし | bookmark |
-| DELETE | `/developer/posts/{id}/bookmark` | API key | なし | unbookmark |
-| POST | `/developer/posts/{id}/rekarot` | API key | なし | rekarot |
-| DELETE | `/developer/posts/{id}/rekarot` | API key | なし | unrekarot |
-| GET | `/developer/timeline` | API key | `limit`, `mode` | timeline |
-| GET | `/developer/search` | API key | `q`, `type`, `limit`, `cursor` | search |
-| GET | `/developer/users/{id}` | API key | なし | user |
-| GET | `/developer/users/{id}/followers` | API key | なし | followers |
-| GET | `/developer/users/{id}/following` | API key | なし | following |
-| POST | `/developer/users/{id}/follow` | API key | なし | follow |
-| DELETE | `/developer/users/{id}/follow` | API key | なし | unfollow |
-| GET | `/developer/bookmarks` | API key | `page`, `limit`, `cursor` | bookmarks |
-| GET | `/developer/me` | API key | なし | key owner |
-| GET | `/developer/apikeys` | API key | なし | API key一覧 |
-| GET | `/developer/usage` | API key | なし | 使用量 |
+| Method | Path | 主な権限 | Body / Query |
+|---|---|---|---|
+| GET | `/developer/users/me` | 認証 | なし |
+| GET | `/developer/timeline` | `canReadTimeline` | `page?`, `limit?` |
+| POST | `/developer/posts` | `canCreatePosts` | multipart: `content`, `parentId?`, `quotedPostId?`, `visibility?`, `media?`, `pollOptions?`, `pollDurationHours?`, 年齢・R18 flag |
+| GET | `/developer/posts` | `canReadPosts` | `page?`, `limit?`, `userId?` |
+| GET | `/developer/posts/{postId}` | `canReadPosts` | なし |
+| GET | `/developer/posts/{postId}/replies` | `canReadPosts` | `page?`, `limit?` |
+| GET | `/developer/posts/{postId}/quotes` | `canReadPosts` | paging |
+| PATCH | `/developer/posts/{postId}` | `canCreatePosts` | 投稿更新 payload |
+| DELETE | `/developer/posts/{postId}` | `canCreatePosts` | なし |
+| POST | `/developer/posts/{postId}/like` | write | なし |
+| DELETE | `/developer/posts/{postId}/like` | write | なし |
+| POST | `/developer/posts/{postId}/bookmark` | write | なし |
+| DELETE | `/developer/posts/{postId}/bookmark` | write | なし |
+| PUT | `/developer/posts/{postId}/bookmark-folders` | write | `folderIds` |
+| POST | `/developer/posts/{postId}/rekarot` | write | なし |
+| DELETE | `/developer/posts/{postId}/rekarot` | write | なし |
+| POST | `/developer/posts/{postId}/react` | `canCreatePosts` | `emoji` |
+| DELETE | `/developer/posts/{postId}/react/{emoji}` | `canCreatePosts` | なし |
+| GET | `/developer/posts/{postId}/reactions` | `canReadPosts` | なし |
+| GET | `/developer/bookmarks` | read | `page?`, `limit?`, `folderId?` |
+| GET | `/developer/users/{id}` | read | なし |
+| GET | `/developer/users/by/username/{username}` | read | なし |
+| GET | `/developer/users/{id}/followers` | `canReadFollows` | `limit?`, `cursor?` |
+| GET | `/developer/users/{id}/following` | `canReadFollows` | `limit?`, `cursor?` |
+| POST | `/developer/users/{id}/follow` | write | なし |
+| DELETE | `/developer/users/{id}/follow` | write | なし |
+| GET | `/developer/follows/{username}` | `canReadFollows` | なし |
+| GET | `/developer/follow-requests` | follow | なし |
+| POST | `/developer/follow-requests/{requestId}/accept` | follow | なし |
+| POST | `/developer/follow-requests/{requestId}/reject` | follow | なし |
+| GET | `/developer/search` | `canReadPosts` | `q`, `type?`, `page?`, `limit?` |
+| GET | `/developer/news` | `canReadNews` | `page?`, `limit?` |
+| POST | `/developer/news` | `canCreateNews` | `title`, `body`, `category`, `summary?` |
+| POST | `/developer/news/uploads` | `canCreateNews` | multipart `media` |
+| GET | `/developer/news/{articleId}` | `canReadNews` | なし |
+| PUT | `/developer/news/{articleId}` | `canCreateNews` | 記事 payload |
+| POST | `/developer/news/{articleId}/submit` | `canPublishNews` | なし |
+| GET | `/developer/stories` | `canReadStories` | なし |
+| GET | `/developer/stories/user/{username}` | `canReadStories` | なし |
+| POST | `/developer/stories/{storyId}/like` | `canWriteStories` | なし |
+| DELETE | `/developer/stories/{storyId}/like` | `canWriteStories` | なし |
+| GET | `/developer/stories/{storyId}/comments` | `canReadStories` | なし |
+| POST | `/developer/stories/{storyId}/comments` | `canWriteStories` | `content` |
+| GET | `/developer/boards` | board | なし |
+| GET | `/developer/boards/{slug}` | board | `limit?` |
+| GET | `/developer/boards/threads/{threadId}` | board | なし |
+| POST | `/developer/boards/{slug}/threads` | board | `title`, `content` |
+| POST | `/developer/boards/threads/{threadId}/replies` | board | `content` |
+| POST | `/developer/boards/threads/{threadId}/react` | board | `emoji` |
+| POST | `/developer/boards/replies/{replyId}/react` | board | `emoji` |
+| GET | `/developer/dm/groups` | `canReadDm` | `page?`, `limit?` |
+| GET | `/developer/dm/groups/{groupId}/messages` | `canReadDm` | `limit?`, `cursor?` |
+| POST | `/developer/dm/groups/{groupId}/messages` | `canWriteDm` | `content` |
+| POST | `/developer/dm/groups/{groupId}/messages/images` | `canWriteDm` | multipart `images`, `content?`, attachment metadata |
+| POST | `/developer/dm/groups/{groupId}/read` | `canReadDm` | なし |
+| GET | `/developer/notifications` | notification | `page?`, `limit?`, `type?` |
+| GET | `/developer/notifications/unread/count` | notification | なし |
+| PATCH | `/developer/notifications/{notificationId}/read` | notification | なし |
+| PATCH | `/developer/notifications/read-all` | notification | `type?` |
+| DELETE | `/developer/notifications/{notificationId}` | notification | なし |
+| GET | `/developer/schemas/post` | API key | なし |
+| GET | `/developer/schemas/user` | API key | なし |
+| GET | `/developer/schemas/poll` | API key | なし |
+| GET | `/developer/schemas/timeline-item` | API key | なし |
+| GET | `/developer/apikeys` | API key | なし |
+| GET | `/developer/usage` | API key | なし |
 
 ### Twitter v2互換
 
 | Method | Path | 認証 | Body / Query | 備考 |
 |---|---|---|---|---|
 | GET | `/developer/2/users/me` | API key | なし | me |
+| GET | `/developer/2/users/{id}` | API key | なし | user lookup |
 | GET | `/developer/2/users/by/username/{username}` | API key | なし | user lookup |
 | GET | `/developer/2/users/{id}/tweets` | API key | `max_results`, `pagination_token` | tweets |
 | GET | `/developer/2/users/{id}/timelines/reverse_chronological` | API key | `max_results`, `pagination_token` | home timeline |
@@ -708,6 +891,41 @@ pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDur
 | GET | `/developer/2/spaces` | API key | なし | spaces |
 | GET | `/developer/2/spaces/search` | API key | `query` | space search |
 
+## Subscription / OAuth 2
+
+### Subscription
+
+| Method | Path | 認証 | Body / Query | 備考 |
+|---|---|---|---|---|
+| GET | `/subscriptions/plans` | 任意 | なし | Plan 一覧 |
+| GET | `/subscriptions/me` | 要 | なし | 現在の購読 |
+| POST | `/subscriptions/checkout` | 要 | Checkout payload | Checkout URL |
+| POST | `/subscriptions/portal` | 要 | Portal payload | Portal URL |
+| PATCH | `/subscriptions/preferences` | 要 | Preference payload | 設定 |
+| GET | `/subscriptions/gifts/received` | 要 | なし | 受領 Gift |
+| GET | `/subscriptions/gifts/{giftId}` | 要 | なし | Gift 詳細 |
+| POST | `/subscriptions/gifts/checkout` | 要 | Gift Checkout payload | Gift 購入 |
+| POST | `/subscriptions/gifts/{giftId}/response` | 要 | `action` | 受諾・拒否 |
+
+### OAuth Client 管理
+
+| Method | Path | 認証 | Body / Query | 備考 |
+|---|---|---|---|---|
+| GET | `/oauth/clients` | 要 | なし | Client 一覧 |
+| POST | `/oauth/clients` | 要 | Client payload | Client 作成 |
+| DELETE | `/oauth/clients/{clientId}` | 要 | なし | Client 削除 |
+| POST | `/oauth/clients/{clientId}/secret` | 要 | なし | Secret 再生成 |
+
+### OAuth 2 認可コードフロー
+
+| Method | Path | 認証 | Body / Query | 備考 |
+|---|---|---|---|---|
+| GET | `/oauth/authorize` | User session | `response_type=code`, `client_id`, `redirect_uri`, `scope?`, `state?`, PKCE query | 認可画面 |
+| POST | `/oauth/token` | Client または PKCE | `grant_type`, `code?`, `redirect_uri?`, `client_id?`, `client_secret?`, `code_verifier?`, `refresh_token?` | Token 発行・更新 |
+| GET | `/oauth/userinfo` | OAuth Bearer | なし | OIDC UserInfo |
+
+`scope` は `profile`, `email`, `offline_access`。PKCE method は `S256` または `plain` です。
+
 ## Legal / Misc
 
 | Method | Path | 認証 | Body / Query | 備考 |
@@ -717,6 +935,7 @@ pollを有効化した場合、未指定値は `pollIsAnonymous=true`、`pollDur
 | GET | `/legal/summary` | 不要 | なし | version summary |
 | POST | `/contact` | 不要 | `name`, `email`, `subject?`, `body` | contact |
 | POST | `/reports` | 要 | `targetType`, `targetId`, `reason`, `description?` | report |
+| POST | `/audio` | 要 | multipart `audio` | 音声 upload |
 
 ## 管理API
 
@@ -1047,6 +1266,11 @@ dm:leave
 dm:read
 typing:start
 typing:stop
+guild:join
+guild:leave
+channel:join
+channel:leave
+guild:typing:start
 voice:offer
 voice:answer
 voice:ice-candidate
@@ -1077,6 +1301,23 @@ dm:member-added
 dm:member-left
 dm:member-removed
 dm:request-updated
+guild:message-create
+guild:message-update
+guild:message-delete
+guild:forum-post-create
+guild:forum-post-update
+guild:forum-post-delete
+guild:typing:user
+guild:member-joined
+guild:member-removed
+guild:invites-updated
+guild:event-created
+guild:event-updated
+guild:event-deleted
+guild:voice-state-updated
+channel:created
+channel:updated
+channel:deleted
 user:status
 call:incoming
 call:state

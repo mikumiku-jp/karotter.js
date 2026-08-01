@@ -2,6 +2,9 @@ import type { RequestOptions, RestClient } from "../RestClient.js";
 import { registerWithAndroidTransport } from "../AndroidRegisterTransport.js";
 import type {
   CsrfToken,
+  LegalQuiz,
+  LegalQuizGradeInput,
+  LegalQuizGradeResult,
   LoginInput,
   LoginResult,
   RegisterInput,
@@ -9,9 +12,15 @@ import type {
   SessionInfo,
   SwitchSessionInput,
   SwitchSessionResult,
+  TwoFactorChallenge,
+  TwoFactorDisableInput,
+  TwoFactorEnableResult,
+  TwoFactorLoginInput,
+  TwoFactorSetup,
 } from "../../structures/Auth.js";
 import type { CurrentUser } from "../../structures/User.js";
 import type { MessageEnvelope } from "../../util/types.js";
+import { TwoFactorRequiredError } from "../../util/errors.js";
 import { assertPositiveInteger } from "../../util/validation.js";
 import { encodeId } from "../utils.js";
 
@@ -70,6 +79,12 @@ export interface OAuthStartUrlOptions {
   addAccount?: boolean;
 }
 
+function isTwoFactorChallenge(
+  response: LoginResult | TwoFactorChallenge,
+): response is TwoFactorChallenge {
+  return "twoFactorRequired" in response && response.twoFactorRequired === true;
+}
+
 export class AuthApi {
   constructor(private readonly rest: RestClient) {}
 
@@ -84,9 +99,36 @@ export class AuthApi {
       clientType: this.rest.auth.clientType,
       deviceName: this.rest.auth.deviceName,
     };
-    const result = await this.rest.post<LoginResult>(
+    const result = await this.rest.post<LoginResult | TwoFactorChallenge>(
       "/auth/login",
       body,
+      loginOptions,
+    );
+    if (isTwoFactorChallenge(result)) {
+      throw new TwoFactorRequiredError(result.twoFactorToken);
+    }
+    if (result.accessToken) {
+      this.rest.auth.setTokens({
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken ?? this.rest.auth.refreshToken,
+      });
+    }
+    return result;
+  }
+
+  async loginWithTwoFactor(input: TwoFactorLoginInput): Promise<LoginResult> {
+    const loginOptions =
+      this.rest.auth.clientType === "android"
+        ? ANDROID_WEBVIEW_AUTH_OPTIONS
+        : undefined;
+    const result = await this.rest.post<LoginResult>(
+      "/auth/login/2fa",
+      {
+        ...input,
+        deviceId: this.rest.auth.deviceId,
+        clientType: this.rest.auth.clientType,
+        deviceName: this.rest.auth.deviceName,
+      },
       loginOptions,
     );
     if (result.accessToken) {
@@ -271,6 +313,30 @@ export class AuthApi {
 
   resendVerificationByEmail(email: string): Promise<MessageEnvelope> {
     return this.rest.post("/auth/resend-verification", { email });
+  }
+
+  setupTwoFactor(): Promise<TwoFactorSetup> {
+    return this.rest.get("/auth/2fa/setup");
+  }
+
+  enableTwoFactor(code: string): Promise<TwoFactorEnableResult> {
+    return this.rest.post("/auth/2fa/enable", { code });
+  }
+
+  disableTwoFactor(input: TwoFactorDisableInput): Promise<MessageEnvelope> {
+    return this.rest.post("/auth/2fa/disable", input);
+  }
+
+  legalQuiz(): Promise<LegalQuiz> {
+    return this.rest.get("/auth/legal-quiz");
+  }
+
+  gradeLegalQuiz(input: LegalQuizGradeInput): Promise<LegalQuizGradeResult> {
+    return this.rest.post("/auth/legal-quiz/grade", input);
+  }
+
+  disconnectOAuth(provider: OAuthProvider | (string & {})): Promise<MessageEnvelope> {
+    return this.rest.delete(`/auth/oauth/${encodeURIComponent(provider)}`);
   }
 
   buildOAuthStartUrl(options: OAuthStartUrlOptions): string {

@@ -158,6 +158,10 @@ export class UsersApi {
     );
   }
 
+  levelRanking(query?: Pagination): Promise<{ users: User[] }> {
+    return this.rest.get("/users/level-ranking", encodeQuery(query));
+  }
+
   deleteAccount(password: string): Promise<MessageEnvelope> {
     return this.rest.delete("/users/account", { data: { password } });
   }

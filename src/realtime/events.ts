@@ -5,6 +5,14 @@ import type {
   DrawStroke,
   DrawStrokePoint,
 } from "../structures/Draw.js";
+import type {
+  GuildChannel,
+  GuildEvent,
+  GuildForumPost,
+  GuildMember,
+  GuildMessage,
+  GuildVoiceState,
+} from "../structures/Guild.js";
 import type { Post } from "../structures/Post.js";
 import type {
   RadioMessage,
@@ -90,6 +98,34 @@ export const ScreenShareEvents = {
 
 export const UserStatusEvents = {
   Status: "user:status",
+} as const;
+
+export const ChannelEvents = {
+  Join: "channel:join",
+  Leave: "channel:leave",
+  Created: "channel:created",
+  Updated: "channel:updated",
+  Deleted: "channel:deleted",
+} as const;
+
+export const GuildEvents = {
+  Join: "guild:join",
+  Leave: "guild:leave",
+  MessageCreate: "guild:message-create",
+  MessageUpdate: "guild:message-update",
+  MessageDelete: "guild:message-delete",
+  ForumPostCreate: "guild:forum-post-create",
+  ForumPostUpdate: "guild:forum-post-update",
+  ForumPostDelete: "guild:forum-post-delete",
+  TypingStart: "guild:typing:start",
+  TypingUser: "guild:typing:user",
+  MemberJoined: "guild:member-joined",
+  MemberRemoved: "guild:member-removed",
+  InvitesUpdated: "guild:invites-updated",
+  EventCreated: "guild:event-created",
+  EventUpdated: "guild:event-updated",
+  EventDeleted: "guild:event-deleted",
+  VoiceStateUpdated: "guild:voice-state-updated",
 } as const;
 
 export interface NotificationEventPayload {
@@ -275,6 +311,34 @@ export interface ScreenShareViewPayload {
   viewing: boolean;
 }
 
+export interface GuildMessagePayload {
+  channelId: Snowflake;
+  message: GuildMessage;
+}
+
+export interface GuildMessageDeletedPayload {
+  channelId: Snowflake;
+  messageId: Snowflake;
+}
+
+export interface GuildTypingPayload {
+  guildId?: Snowflake;
+  channelId: Snowflake;
+  userId?: Snowflake;
+  username?: string;
+}
+
+export interface GuildResourcePayload {
+  guildId?: Snowflake;
+  channelId?: Snowflake;
+  channel?: GuildChannel;
+  forumPost?: GuildForumPost;
+  member?: GuildMember;
+  event?: GuildEvent;
+  voiceState?: GuildVoiceState;
+  [extra: string]: unknown;
+}
+
 export interface ServerToClientEvents {
   notification: (payload: NotificationEventPayload) => void;
   [DmEvents.NewMessage]: (payload: DmMessagePayload) => void;
@@ -310,6 +374,23 @@ export interface ServerToClientEvents {
   [DrawEvents.Error]: (payload: DrawErrorPayload) => void;
   [TypingEvents.User]: (payload: TypingPayload) => void;
   [TypingEvents.Stop]: (payload: TypingPayload) => void;
+  [GuildEvents.MessageCreate]: (payload: GuildMessagePayload) => void;
+  [GuildEvents.MessageUpdate]: (payload: GuildMessagePayload) => void;
+  [GuildEvents.MessageDelete]: (payload: GuildMessageDeletedPayload) => void;
+  [GuildEvents.ForumPostCreate]: (payload: GuildResourcePayload) => void;
+  [GuildEvents.ForumPostUpdate]: (payload: GuildResourcePayload) => void;
+  [GuildEvents.ForumPostDelete]: (payload: GuildResourcePayload) => void;
+  [GuildEvents.TypingUser]: (payload: GuildTypingPayload) => void;
+  [GuildEvents.MemberJoined]: (payload: GuildResourcePayload) => void;
+  [GuildEvents.MemberRemoved]: (payload: GuildResourcePayload) => void;
+  [GuildEvents.InvitesUpdated]: (payload: GuildResourcePayload) => void;
+  [GuildEvents.EventCreated]: (payload: GuildResourcePayload) => void;
+  [GuildEvents.EventUpdated]: (payload: GuildResourcePayload) => void;
+  [GuildEvents.EventDeleted]: (payload: GuildResourcePayload) => void;
+  [GuildEvents.VoiceStateUpdated]: (payload: GuildResourcePayload) => void;
+  [ChannelEvents.Created]: (payload: GuildResourcePayload) => void;
+  [ChannelEvents.Updated]: (payload: GuildResourcePayload) => void;
+  [ChannelEvents.Deleted]: (payload: GuildResourcePayload) => void;
 }
 
 export interface ClientToServerEvents {
@@ -335,6 +416,14 @@ export interface ClientToServerEvents {
   [DrawEvents.Cursor]: (payload: DrawCursorPayload) => void;
   [DrawEvents.Chat]: (payload: { roomId: string; content: string }) => void;
   [ScreenShareEvents.View]: (payload: ScreenShareViewPayload) => void;
+  [GuildEvents.Join]: (payload: { guildId: Snowflake }) => void;
+  [GuildEvents.Leave]: (payload: { guildId: Snowflake }) => void;
+  [GuildEvents.TypingStart]: (payload: {
+    guildId: Snowflake;
+    channelId: Snowflake;
+  }) => void;
+  [ChannelEvents.Join]: (payload: { channelId: Snowflake }) => void;
+  [ChannelEvents.Leave]: (payload: { channelId: Snowflake }) => void;
 }
 
 export type ServerEventName = keyof ServerToClientEvents;

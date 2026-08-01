@@ -102,6 +102,19 @@ export interface ScheduledPost {
   [extra: string]: unknown;
 }
 
+export interface ScheduledPostUpdateInput {
+  content: string;
+  scheduledFor: IsoDate;
+}
+
+export interface PostTranslation {
+  translatedText: string;
+  sourceLanguage?: string | null;
+  sourceLanguageConfidence?: number | null;
+  targetLocale?: string | null;
+  sameLanguage?: boolean;
+}
+
 export interface PostDraft {
   id: Snowflake;
   content?: string;

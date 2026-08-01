@@ -5,6 +5,7 @@ import type {
 } from "../../structures/Social.js";
 import type { Post } from "../../structures/Post.js";
 import type { User } from "../../structures/User.js";
+import type { CommunityListResponse } from "../../structures/Community.js";
 import type { CursorPagination, PageInfo } from "../../util/types.js";
 import { encodeQuery } from "../utils.js";
 
@@ -35,6 +36,10 @@ export class SearchApi {
 
   users(query: SearchQuery): Promise<{ users: User[]; pagination?: PageInfo }> {
     return this.rest.get("/search/users", encodeQuery(query));
+  }
+
+  communities(query: SearchQuery): Promise<CommunityListResponse> {
+    return this.rest.get("/search/communities", encodeQuery(query));
   }
 
   posts(

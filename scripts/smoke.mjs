@@ -2,8 +2,8 @@ import { Karotter } from "../dist/esm/index.js";
 
 const client = new Karotter();
 
-const csrf = await client.auth.getCsrfToken();
-console.log("csrfToken:", csrf?.csrfToken?.slice(0, 8) + "...");
+const csrf = await client.auth.csrf();
+console.log("csrf token:", csrf.csrfToken.slice(0, 8));
 
 try {
   const trending = await client.search.trendingTopics(3);
@@ -13,11 +13,10 @@ try {
 }
 
 try {
-  const timeline = await client.posts.timeline({ mode: "latest", limit: 3 });
-  console.log("timeline posts:", timeline.posts?.length ?? 0);
+  const timeline = await client.timeline.public({ mode: "latest", limit: 3 });
+  console.log("public feed posts:", timeline.posts?.length ?? 0);
 } catch (err) {
-  console.log("timeline error:", err?.status, err?.message);
+  console.log("public feed error:", err?.status, err?.message);
 }
 
-console.log("device id:", client.http.auth.deviceId);
-console.log("cookies after csrf:", client.http.auth.cookies);
+await client.destroy();

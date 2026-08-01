@@ -124,6 +124,19 @@ export class RadioApi {
     );
   }
 
+  realtimeToken(id: Snowflake | string): Promise<{ token: string; url?: string }> {
+    return this.rest.get(`/radio/${encodeId(id)}/realtime-token`);
+  }
+
+  transferHost(
+    id: Snowflake | string,
+    participantId: Snowflake | string,
+  ): Promise<MessageEnvelope> {
+    return this.rest.post(
+      `/radio/${encodeId(id)}/participants/${encodeId(participantId)}/transfer-host`,
+    );
+  }
+
   updateSettings(
     id: Snowflake | string,
     settings: RadioSettings,

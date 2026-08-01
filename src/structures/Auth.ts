@@ -16,6 +16,63 @@ export interface LoginResult {
   user: CurrentUser;
 }
 
+export interface TwoFactorChallenge {
+  twoFactorRequired: true;
+  twoFactorToken: string;
+}
+
+export interface TwoFactorLoginInput {
+  twoFactorToken: string;
+  code: string;
+}
+
+export interface TwoFactorDisableInput {
+  code?: string;
+  password?: string;
+}
+
+export interface TwoFactorSetup {
+  secret?: string;
+  qrCode?: string;
+  otpauthUrl?: string;
+  [extra: string]: unknown;
+}
+
+export interface TwoFactorEnableResult {
+  backupCodes: string[];
+  message?: string;
+}
+
+export interface LegalQuizOption {
+  id: string;
+  label?: string;
+  explanation?: string;
+  [extra: string]: unknown;
+}
+
+export interface LegalQuizQuestion {
+  id: string;
+  options: LegalQuizOption[];
+  [extra: string]: unknown;
+}
+
+export interface LegalQuiz {
+  token: string;
+  questions: LegalQuizQuestion[];
+  [extra: string]: unknown;
+}
+
+export interface LegalQuizGradeInput {
+  legalQuizToken: string;
+  legalQuizAnswers: Record<string, string>;
+}
+
+export interface LegalQuizGradeResult {
+  passed?: boolean;
+  questions?: LegalQuizQuestion[];
+  [extra: string]: unknown;
+}
+
 export interface RegisterInput {
   username: string;
   email: string;

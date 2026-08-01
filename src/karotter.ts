@@ -5,12 +5,19 @@ import {
 } from "./rest/RestClient.js";
 import { AdminApi } from "./rest/api/AdminApi.js";
 import { ApiKeysApi } from "./rest/api/ApiKeysApi.js";
-import { AuthApi } from "./rest/api/AuthApi.js";
+import { AuthApi, type OAuthProvider } from "./rest/api/AuthApi.js";
+import { BotApi } from "./rest/api/BotApi.js";
+import { ChannelsApi } from "./rest/api/ChannelsApi.js";
+import { CommunitiesApi } from "./rest/api/CommunitiesApi.js";
 import { BoardsApi } from "./rest/api/BoardsApi.js";
 import { DeveloperApi } from "./rest/api/DeveloperApi.js";
+import { GuildBotsApi } from "./rest/api/GuildBotsApi.js";
+import { GuildsApi } from "./rest/api/GuildsApi.js";
 import { LegalApi } from "./rest/api/LegalApi.js";
 import { MiscApi } from "./rest/api/MiscApi.js";
 import { NewsApi } from "./rest/api/NewsApi.js";
+import { OAuthApi } from "./rest/api/OAuthApi.js";
+import { SubscriptionsApi } from "./rest/api/SubscriptionsApi.js";
 import { Gateway, type GatewayOptions } from "./realtime/Gateway.js";
 import type {
   ClientEventArgs,
@@ -19,9 +26,16 @@ import type {
   ServerEventName,
 } from "./realtime/events.js";
 import type {
+  LegalQuiz,
+  LegalQuizGradeInput,
+  LegalQuizGradeResult,
   LoginInput,
   LoginResult,
   RegisterInput,
+  TwoFactorDisableInput,
+  TwoFactorEnableResult,
+  TwoFactorLoginInput,
+  TwoFactorSetup,
 } from "./structures/Auth.js";
 import type {
   CreatePostInput,
@@ -29,8 +43,12 @@ import type {
   PollDraft,
   Post,
   PostAnalytics,
+  PostTranslation,
+  ScheduledPost,
+  ScheduledPostUpdateInput,
 } from "./structures/Post.js";
 import type { CurrentUser, User, UserDetail } from "./structures/User.js";
+import type { CommunityListResponse } from "./structures/Community.js";
 import type {
   CursorPagination,
   JsonObject,
@@ -77,6 +95,7 @@ export type ResourceTarget =
 
 export interface KarotterOptions extends RestClientOptions {
   gateway?: GatewayOptions;
+  botToken?: string;
   connect?: boolean;
 }
 
@@ -112,6 +131,10 @@ export interface TimelineOptions extends OffsetPagination {
 
 export interface RecommendedOptions extends Pagination {
   mode?: "algorithm" | "latest" | "beta" | (string & {});
+}
+
+export interface PublicFeedOptions extends RecommendedOptions {
+  kind?: string;
 }
 
 export interface BookmarkListOptions extends Pagination {
@@ -236,6 +259,7 @@ export interface RequestInput {
 
 export class Karotter {
   readonly auth: AuthActions;
+  readonly oauth: OAuthActions;
   readonly posts: PostsActions;
   readonly timeline: TimelineActions;
   readonly users: UsersActions;
@@ -244,10 +268,16 @@ export class Karotter {
   readonly notifications: NotificationsActions;
   readonly search: SearchActions;
   readonly social: SocialActions;
+  readonly communities: CommunitiesActions;
+  readonly guilds: GuildsActions;
+  readonly channels: ChannelsActions;
+  readonly bot: BotActions;
+  readonly guildBots: GuildBotsActions;
   readonly radio: RadioActions;
   readonly draw: DrawActions;
   readonly news: NewsActions;
   readonly boards: BoardsActions;
+  readonly subscriptions: SubscriptionsActions;
   readonly apiKeys: ApiKeyActions;
   readonly developer: DeveloperActions;
   readonly legal: LegalActions;
@@ -262,12 +292,13 @@ export class Karotter {
   private readonly shouldConnectAfterAuth: boolean;
 
   constructor(options: KarotterOptions = {}) {
-    const { gateway, connect, ...restOptions } = options;
+    const { gateway, connect, botToken, ...restOptions } = options;
     this.rest = new RestClient(restOptions);
     this.gateway = new Gateway(this.rest, gateway);
     this.authApi = new AuthApi(this.rest);
     this.shouldConnectAfterAuth = connect ?? false;
     this.auth = new AuthActions(this.rest, this.authApi);
+    this.oauth = new OAuthActions(this.rest);
     this.posts = new PostsActions(this.rest);
     this.timeline = new TimelineActions(this.rest);
     this.users = new UsersActions(this.rest);
@@ -276,10 +307,16 @@ export class Karotter {
     this.notifications = new NotificationsActions(this.rest);
     this.search = new SearchActions(this.rest);
     this.social = new SocialActions(this.rest);
+    this.communities = new CommunitiesActions(this.rest);
+    this.guilds = new GuildsActions(this.rest);
+    this.channels = new ChannelsActions(this.rest);
+    this.bot = new BotActions(this.rest, botToken);
+    this.guildBots = new GuildBotsActions(this.rest);
     this.radio = new RadioActions(this.rest);
     this.draw = new DrawActions(this.rest);
     this.news = new NewsActions(this.rest);
     this.boards = new BoardsActions(this.rest);
+    this.subscriptions = new SubscriptionsActions(this.rest);
     this.apiKeys = new ApiKeyActions(this.rest);
     this.developer = new DeveloperActions(this.rest);
     this.legal = new LegalActions(this.rest);
@@ -302,6 +339,11 @@ export class Karotter {
     };
     if (input.gender !== undefined) loginInput.gender = input.gender;
     const result = await this.authApi.login(loginInput);
+    return this.applyLoginResult(result);
+  }
+
+  async loginWithTwoFactor(input: TwoFactorLoginInput): Promise<CurrentUser> {
+    const result = await this.authApi.loginWithTwoFactor(input);
     return this.applyLoginResult(result);
   }
 
@@ -558,6 +600,34 @@ export class AuthActions {
     return this.rest.post("/auth/resend-verification", { email });
   }
 
+  setupTwoFactor(): Promise<TwoFactorSetup> {
+    return this.api.setupTwoFactor();
+  }
+
+  enableTwoFactor(code: string): Promise<TwoFactorEnableResult> {
+    return this.api.enableTwoFactor(code);
+  }
+
+  disableTwoFactor(input: TwoFactorDisableInput): Promise<MessageEnvelope> {
+    return this.api.disableTwoFactor(input);
+  }
+
+  legalQuiz(): Promise<LegalQuiz> {
+    return this.api.legalQuiz();
+  }
+
+  gradeLegalQuiz(
+    input: LegalQuizGradeInput,
+  ): Promise<LegalQuizGradeResult> {
+    return this.api.gradeLegalQuiz(input);
+  }
+
+  disconnectOAuth(
+    provider: OAuthProvider | (string & {}),
+  ): Promise<MessageEnvelope> {
+    return this.api.disconnectOAuth(provider);
+  }
+
   oauthUrl(options: {
     provider: "google" | "discord";
     mode: "login" | "register";
@@ -733,6 +803,15 @@ export class PostsActions {
     return this.update(target, input);
   }
 
+  translate(
+    target: ResourceTarget,
+    targetLocale: string,
+  ): Promise<PostTranslation> {
+    return this.rest.post(`/posts/${encodeId(idOf(target))}/translate`, {
+      targetLocale,
+    });
+  }
+
   react(target: ResourceTarget, emoji: string): Promise<MessageEnvelope> {
     return this.rest.post(`/posts/${encodeId(idOf(target))}/react`, { emoji });
   }
@@ -777,6 +856,14 @@ export class PostsActions {
     });
   }
 
+  reportPublicFeedViews(
+    targets: ResourceTarget[],
+  ): Promise<{ recorded: number }> {
+    return this.rest.post("/v2/feed/views", {
+      postIds: targets.map((target) => Number(idOf(target))),
+    });
+  }
+
   betaSurvey(
     preference: "beta" | "current",
     variant?: string,
@@ -787,12 +874,22 @@ export class PostsActions {
     });
   }
 
-  scheduled(): Promise<{ scheduledPosts: unknown[] }> {
+  scheduled(): Promise<{ scheduledPosts: ScheduledPost[] }> {
     return this.rest.get("/posts/scheduled/me");
   }
 
   cancelScheduled(target: ResourceTarget): Promise<MessageEnvelope> {
     return this.rest.delete(`/posts/scheduled/${encodeId(idOf(target))}`);
+  }
+
+  updateScheduled(
+    target: ResourceTarget,
+    input: ScheduledPostUpdateInput,
+  ): Promise<{ message?: string; scheduledPost?: ScheduledPost }> {
+    return this.rest.put(
+      `/posts/scheduled/${encodeId(idOf(target))}`,
+      input,
+    );
   }
 
   bookmarkFolders(): Promise<{ folders: unknown[] }> {
@@ -861,6 +958,10 @@ export class TimelineActions {
 
   recommended(query?: RecommendedOptions): Promise<PostList> {
     return this.rest.get("/posts/recommended", encodeQuery(query));
+  }
+
+  public(query?: PublicFeedOptions): Promise<PostList> {
+    return this.rest.get("/v2/feed/public", encodeQuery(query));
   }
 }
 
@@ -936,6 +1037,10 @@ export class UsersActions {
 
   recommended(query?: { limit?: number }): Promise<UserList> {
     return this.rest.get("/users/recommended", encodeQuery(query));
+  }
+
+  levelRanking(query?: Pagination): Promise<UserList> {
+    return this.rest.get("/users/level-ranking", encodeQuery(query));
   }
 
   usernameQuota(): Promise<unknown> {
@@ -1137,6 +1242,14 @@ export class DmActions {
     pagination?: PageInfo;
   }> {
     return this.rest.get("/dm/groups", encodeQuery(query));
+  }
+
+  unreadCount(): Promise<{
+    count?: number;
+    unreadCount?: number;
+    [extra: string]: unknown;
+  }> {
+    return this.rest.get("/dm/unread/count");
   }
 
   async createGroup(targets: ResourceTarget[]): Promise<DmConversation> {
@@ -1427,6 +1540,10 @@ export class SearchActions {
     return this.rest.get("/search/users", encodeQuery(query));
   }
 
+  communities(query: SearchOptions): Promise<CommunityListResponse> {
+    return this.rest.get("/search/communities", encodeQuery(query));
+  }
+
   posts(query: PostSearchOptions): Promise<PostList> {
     return this.rest.get("/search/posts", encodeQuery(query));
   }
@@ -1529,6 +1646,13 @@ export class SocialActions {
     return this.rest.delete(`/social/circles/${encodeId(id)}`);
   }
 
+  updateCircle(
+    id: Snowflake | string,
+    input: { name?: string },
+  ): Promise<{ circle: unknown }> {
+    return this.rest.patch(`/social/circles/${encodeId(id)}`, input);
+  }
+
   async addCircleMember(circleId: Snowflake | string, user: ResourceTarget): Promise<MessageEnvelope> {
     const userId = await resolveUserId(this.rest, user);
     return this.rest.post(`/social/circles/${encodeId(circleId)}/members`, {
@@ -1562,6 +1686,13 @@ export class SocialActions {
 
   deleteList(id: Snowflake | string): Promise<MessageEnvelope> {
     return this.rest.delete(`/social/lists/${encodeId(id)}`);
+  }
+
+  updateList(
+    id: Snowflake | string,
+    input: { name?: string; description?: string; isPublic?: boolean },
+  ): Promise<{ list: unknown }> {
+    return this.rest.patch(`/social/lists/${encodeId(id)}`, input);
   }
 
   listPosts(listId: Snowflake | string, query?: Pagination): Promise<PostList> {
@@ -1763,6 +1894,20 @@ export class RadioActions {
     );
   }
 
+  realtimeToken(id: ResourceTarget): Promise<{ token: string; url?: string }> {
+    return this.rest.get(`/radio/${encodeId(idOf(id))}/realtime-token`);
+  }
+
+  async transferHost(
+    id: ResourceTarget,
+    participant: ResourceTarget,
+  ): Promise<MessageEnvelope> {
+    const participantId = await resolveUserId(this.rest, participant);
+    return this.rest.post(
+      `/radio/${encodeId(idOf(id))}/participants/${encodeId(participantId)}/transfer-host`,
+    );
+  }
+
   updateSettings(id: ResourceTarget, settings: JsonObject): Promise<{ space: unknown }> {
     return this.rest.patch(`/radio/${encodeId(idOf(id))}/settings`, settings);
   }
@@ -1803,10 +1948,28 @@ export class DrawActions {
     return this.rest.post(`/draw/rooms/${encodeId(roomId)}/invite/rotate`);
   }
 
+  realtimeToken(roomId: string): Promise<{ token: string; url?: string }> {
+    return this.rest.get(`/draw/rooms/${encodeId(roomId)}/realtime-token`);
+  }
+
   syncLayers(roomId: string, layers: unknown): Promise<MessageEnvelope> {
     return this.rest.put(`/draw/rooms/${encodeId(roomId)}/layers`, layers);
   }
 }
+
+export class CommunitiesActions extends CommunitiesApi {}
+
+export class GuildsActions extends GuildsApi {}
+
+export class ChannelsActions extends ChannelsApi {}
+
+export class GuildBotsActions extends GuildBotsApi {}
+
+export class BotActions extends BotApi {}
+
+export class OAuthActions extends OAuthApi {}
+
+export class SubscriptionsActions extends SubscriptionsApi {}
 
 export class NewsActions extends NewsApi {
   list(query?: NewsListOptions): ReturnType<NewsApi["list"]> {

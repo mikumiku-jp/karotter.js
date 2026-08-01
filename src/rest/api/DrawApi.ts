@@ -45,6 +45,10 @@ export class DrawApi {
     return this.rest.post(`/draw/rooms/${encodeId(roomId)}/invite/rotate`);
   }
 
+  realtimeToken(roomId: string): Promise<{ token: string; url?: string }> {
+    return this.rest.get(`/draw/rooms/${encodeId(roomId)}/realtime-token`);
+  }
+
   syncLayers(roomId: string, layers: DrawLayers): Promise<MessageEnvelope> {
     return this.rest.put(`/draw/rooms/${encodeId(roomId)}/layers`, layers);
   }

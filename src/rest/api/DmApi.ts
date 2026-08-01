@@ -41,6 +41,12 @@ export interface DmMessagesResponse {
   pagination?: PageInfo;
 }
 
+export interface DmUnreadCount {
+  count?: number;
+  unreadCount?: number;
+  [extra: string]: unknown;
+}
+
 export class DmApi {
   constructor(private readonly rest: RestClient) {}
 
@@ -48,6 +54,10 @@ export class DmApi {
     return this.rest
       .get<DmGroupsResponse>("/dm/groups", encodeQuery(query))
       .then((response) => validateListResponse(response, "groups", "dm.groups"));
+  }
+
+  unreadCount(): Promise<DmUnreadCount> {
+    return this.rest.get("/dm/unread/count");
   }
 
   createGroup(userIds: Array<Snowflake | string>): Promise<{ group: DmGroup }> {
